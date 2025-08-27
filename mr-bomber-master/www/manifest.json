@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json.schemastore.org/web-manifest-combined.json",
+  "name": "MrBoom",
+  "short_name": "MrBoom",
+  "description": "This is clone of old game MrBoom (or Bomberman) on JavaScript",
+  "start_url": "play.html",
+  "display": "fullscreen",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "landscape",
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "lang": "en",
+  "id": "Mr.Boom",
+  "dir": "ltr",
+  "shortcuts": [
+    {
+      "name": "Play",
+      "url": "play.html"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "Gfx2x/MRFOND.PNG"
+    }
+  ],
+  "categories": [
+    "games"
+  ],
+  "iarc_rating_id": "1d1019a5-90dd-4730-b793-bb6400fd644e",
+  "icons": [
+    {
+      "src": "mrboom.png",
+      "sizes": "48x48 72x72 96x96 128x128 256x256 512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

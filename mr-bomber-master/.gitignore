@@ -1,0 +1,6 @@
+.DS_Store
+.gitattributes
+.vs
+*.csproj.user
+*.vcxproj.user
+*.user
