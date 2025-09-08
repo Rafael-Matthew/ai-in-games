@@ -745,6 +745,10 @@ async function init() {
             e.stopPropagation();
         }
         keyStory.push(e.code);
+        // Spawn a bot on start screen when pressing the "B" key
+        if (e.code == "KeyB" && state == States.start && startMenu && startMenu.addBot) {
+            startMenu.addBot();
+        }
         if (checkEnd(keyStory, "IDDQD")) {
             console.log("God mode activated");
             for (let sprite of sprites) {
@@ -929,6 +933,15 @@ class StartMenu {
     playerList = [];
     subtitlesMove = 0;
     frame = 0;
+
+    addBot() {
+    if (this.playerList.length >= 8) return; // max players
+    const controller = new IdleController();
+    const id = Int.random(1000000);
+    controller.id = id;
+    this.playerList.push({ id: id, name: "bot", controller: controller });
+    soundManager.playSound("addplayer");
+    }
 }
 
 let victory;
@@ -1367,6 +1380,13 @@ class GamepadController {
     }
 }
 
+// Simple idle bot controller: never presses any key
+class IdleController {
+    playerKeys;
+    constructor() { this.playerKeys = []; }
+    update() { /* no-op keeps bot idle */ }
+}
+
 class DemoController {
     playerKeys;
     moves;
@@ -1387,7 +1407,7 @@ class DemoController {
         this.playerKeys = {};
 
         const move = (direction) => {
-            if (this.step < ((this.sprite.isHaveRollers) ? 8 : 16)) {
+            if (this.step < ((this.sprite && this.sprite.isHaveRollers) ? 8 : 16)) {
                 this.playerKeys[direction] = true;
                 this.step++;
             } else {
