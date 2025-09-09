@@ -515,7 +515,6 @@ class Terrain {
       }
     }
   }
-
   generateGiven() {
     let rnd = rand();
     if (rnd < 0.5) {
@@ -1206,6 +1205,20 @@ function drawAll(interpolationPercentage) {
       sprite.draw(ctx);
     }
 
+    // draw player names
+    for (let sprite of sprites) {
+      if (sprite.playerName && !sprite.isDie) {
+        const name = sprite.playerName;
+  const width = name.length * 8; // each character 8px
+  // sprite horizontal center is at sprite.x + 16 (see Sprite.draw offset +8+8)
+  const nameX = Math.round(sprite.x + 16 - width / 2);
+  // keep previous vertical offset (can tweak later if needed)
+  const nameY = Math.round(sprite.y - 14);
+  // use original (yellow) color as requested
+  drawString(ctx, nameX, nameY, name, "original");
+      }
+    }
+
     for (let overlay of levelAssets.overlays) {
       overlay.images[Math.floor(overlay.idx) % overlay.images.length].draw(
         ctx,
@@ -1380,6 +1393,8 @@ function startGame(playerList) {
       sprite = new Sprite(i);
       map.locateSprite(sprite);
       sprite.controller = playerList[i].controller;
+  // store player name on sprite so drawAll can render it
+  sprite.playerName = playerList[i].name;
       sprites.push(sprite);
     }
   }
