@@ -1257,27 +1257,26 @@ function drawAll(interpolationPercentage) {
     }
   } else if (state == States.start) {
     assets.start.draw(ctx, 0, 0);
+    // Only show the first (top) row: 4 slots total
     for (let x = 0; x < 4; x++) {
-      for (let y = 0; y < 2; y++) {
-        const index = y * 4 + x;
-        const color = colors[Int.divFloor(index, 2)];
-        const player = startMenu.playerList[index];
-        if (player) {
-          drawString(ctx, 13 + x * 80, 78 + y * 70, "name ?", color);
-          drawString(ctx, 21 + x * 80, 88 + y * 70, player.name, color);
-        } else if (Int.mod(menustep, 4) == 0) {
-          drawString(ctx, x * 80 + 20, y * 70 + 78, "join", color);
-          drawString(ctx, x * 80 + 28, y * 70 + 88, "us", color);
-          drawString(ctx, x * 80 + 28, y * 70 + 98, "!!", color);
-        } else if (Int.mod(menustep, 4) == 2) {
-          drawString(ctx, x * 80 + 20, y * 70 + 78, "push", color);
-          drawString(ctx, x * 80 + 20, y * 70 + 88, "fire", color);
-          drawString(ctx, x * 80 + 28, y * 70 + 98, "!!", color);
-        }
+      const index = x; // 0..3
+      const color = colors[Int.divFloor(index, 2)];
+      const player = startMenu.playerList[index];
+      const baseY = 78; // top row Y
+      if (player) {
+        drawString(ctx, 13 + x * 80, baseY, "name ?", color);
+        drawString(ctx, 21 + x * 80, baseY + 10, player.name, color);
+      } else if (Int.mod(menustep, 4) == 0) {
+        drawString(ctx, x * 80 + 20, baseY, "join", color);
+        drawString(ctx, x * 80 + 28, baseY + 10, "us", color);
+        drawString(ctx, x * 80 + 28, baseY + 20, "!!", color);
+      } else if (Int.mod(menustep, 4) == 2) {
+        drawString(ctx, x * 80 + 20, baseY, "push", color);
+        drawString(ctx, x * 80 + 20, baseY + 10, "fire", color);
+        drawString(ctx, x * 80 + 28, baseY + 20, "!!", color);
       }
-
-      menustep += 1 / 100;
     }
+    menustep += 1 / 100;
 
     drawString(ctx, 320 - startMenu.subtitlesMove, 192, helpText, "white");
   } else if (state == States.draw) {
