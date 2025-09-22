@@ -1757,9 +1757,12 @@ class Sprite {
       this.frameIndex == 0;
     }
 
-    if (this.controller && typeof this.controller.update === 'function') {
+    if (this.controller && typeof this.controller.update === "function") {
       this.controller.update();
-    } else if (this.controller && typeof this.controller.playerKeys === 'undefined') {
+    } else if (
+      this.controller &&
+      typeof this.controller.playerKeys === "undefined"
+    ) {
       // Normalize controller object if malformed
       this.controller.playerKeys = [];
     }
