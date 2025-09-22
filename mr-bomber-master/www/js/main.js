@@ -1153,7 +1153,16 @@ let fade = {
 
 function drawAll(interpolationPercentage) {
   // Extended color list for up to 8 players
-  const colors = ["magenta", "red", "blue", "green", "yellow", "cyan", "orange", "white"];
+  const colors = [
+    "magenta",
+    "red",
+    "blue",
+    "green",
+    "yellow",
+    "cyan",
+    "orange",
+    "white",
+  ];
 
   if (state == States.game) {
     if (mapIndex == 3) {
