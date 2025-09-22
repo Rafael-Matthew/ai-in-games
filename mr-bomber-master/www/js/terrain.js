@@ -189,10 +189,15 @@ class Terrain {
     for (let i = 0; i < sprites.length; i++) {
       if (!sprites[i].isDie) playersCount++;
     }
-    if (APOCALYPSE_ENABLED && !this.apocalypseDisabled && this.timeLeft < 30 && !this.apocalypse)
+    if (
+      APOCALYPSE_ENABLED &&
+      !this.apocalypseDisabled &&
+      this.timeLeft < 30 &&
+      !this.apocalypse
+    )
       this.apocalypse = 1;
     const speed = mapIndex == 7 ? 4 : 2;
-  if (APOCALYPSE_ENABLED && !this.apocalypseDisabled && this.apocalypse) {
+    if (APOCALYPSE_ENABLED && !this.apocalypseDisabled && this.apocalypse) {
       if (this.apocalypse % speed == 0) {
         const apocalypse = this.apocalypse / speed;
         for (let i = 0; i < this.fin.length; i++) {
@@ -256,7 +261,11 @@ class Terrain {
       this.lastApocalypsePlayed++;
       this.apocalypse++;
     }
-  if ((!APOCALYPSE_ENABLED || this.apocalypseDisabled) && !this.toGameEnd && this.timeLeft < 0) {
+    if (
+      (!APOCALYPSE_ENABLED || this.apocalypseDisabled) &&
+      !this.toGameEnd &&
+      this.timeLeft < 0
+    ) {
       // Without apocalypse, trigger end countdown directly when time runs out
       this.toGameEnd = 60 * 3; // 3 seconds grace
     } else if (APOCALYPSE_ENABLED && !this.toGameEnd && this.timeLeft < 0) {
