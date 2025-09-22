@@ -1462,7 +1462,10 @@ function startGame(playerList) {
     }
   }
 
-  map.spawnMonsters(maps[mapIndex].monsters);
+  // Spawn monsters ("bebek") only after the first round so round 1 is completely safe/empty.
+  if (roundNumber > 0 || isDemo) {
+    map.spawnMonsters(maps[mapIndex].monsters);
+  }
   // Increment round counter only for real (non-demo) games so demo loop doesn't consume the blank first round
   if (!isDemo) roundNumber++;
 
