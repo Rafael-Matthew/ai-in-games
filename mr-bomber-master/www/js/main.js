@@ -649,6 +649,7 @@ class Int {
 }
 
 let map;
+let roundNumber = 0; // counts rounds since app start; first game = 0
 
 let keys = {};
 
@@ -657,6 +658,54 @@ addEventListener("load", function () {
 });
 
 function newMap(index = -1) {
+  // First round override: force blank map with 8 spawn points, no monsters, no obstacles
+  if (roundNumber === 0) {
+    const blankWidth = 19; // keep consistent width for HUD layout
+    const blankHeight = 13;
+    // Create empty interior bordered by walls, with 8 spawn markers (*) at corners + midpoints
+    const rows = [];
+    for (let y = 0; y < blankHeight; y++) {
+      if (y === 0 || y === blankHeight - 1) {
+        rows.push("#".repeat(blankWidth));
+      } else {
+        // build inner row
+        let row = "#";
+        for (let x = 1; x < blankWidth - 1; x++) {
+          row += " ";
+        }
+        row += "#";
+        rows.push(row);
+      }
+    }
+    // Place 8 spawn markers: 4 corners inside + 4 edge midpoints
+    const spawnPositions = [
+      { x: 1, y: 1 },
+      { x: blankWidth - 2, y: 1 },
+      { x: 1, y: blankHeight - 2 },
+      { x: blankWidth - 2, y: blankHeight - 2 },
+      { x: Math.floor(blankWidth / 2), y: 1 },
+      { x: Math.floor(blankWidth / 2), y: blankHeight - 2 },
+      { x: 1, y: Math.floor(blankHeight / 2) },
+      { x: blankWidth - 2, y: Math.floor(blankHeight / 2) },
+    ];
+    for (const sp of spawnPositions) {
+      const chars = rows[sp.y].split("");
+      chars[sp.x] = "*";
+      rows[sp.y] = chars.join("");
+    }
+    const blankMap = {
+      map: rows,
+      powerUps: [],
+      monsters: [],
+      time: 60, // shorter intro round
+      fin: defaultFin, // reuse existing apocalypse pattern
+    };
+    levelAssets = assets.levels[0]; // reuse first level assets for blank
+    mapIndex = 0; // display background 0 but logical is blank
+    const rv = new Terrain(blankMap);
+    rv.soundCallback = function (sound) { soundManager.playSound(sound); };
+    return rv;
+  }
   if (args.includes("-l")) {
     index = parseInt(args[args.findIndex((v) => v == "-l") + 1]);
   }
@@ -1411,6 +1460,8 @@ function startGame(playerList) {
   }
 
   map.spawnMonsters(maps[mapIndex].monsters);
+  // Increment round counter after setting up map; first round (0) stays blank without monsters
+  roundNumber++;
 
   music.next();
 }
