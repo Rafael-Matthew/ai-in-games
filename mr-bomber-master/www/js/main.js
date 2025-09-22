@@ -1043,7 +1043,9 @@ class StartMenu {
     // Player1 targeting: we resolve at runtime using primaryHumanId stored after startGame.
     const player1Getter = (self) => {
       if (!primaryHumanId) return null;
-      const target = sprites.find((s) => s.controller && s.controller.id === primaryHumanId && !s.isDie);
+      const target = sprites.find(
+        (s) => s.controller && s.controller.id === primaryHumanId && !s.isDie
+      );
       // Ensure not self and alive
       if (target && target !== self) return target;
       return null;
@@ -1497,7 +1499,9 @@ function startGame(playerList) {
     }
     // Fallback: if no explicit p1 found (e.g., auto-spawn scenario below), treat first human (by insertion order) as primary.
     if (!primaryHumanId) {
-      const human = playerList.find(p => p.name && p.name.toLowerCase().startsWith("p"));
+      const human = playerList.find(
+        (p) => p.name && p.name.toLowerCase().startsWith("p")
+      );
       if (human) primaryHumanId = human.controller.id;
     }
   }
@@ -1517,10 +1521,16 @@ function startGame(playerList) {
 function ensureAutoSpawnRoster(startMenu) {
   if (startMenu.playerList.length === 0) {
     // Create a keyboard human controller if none exists (reuse first existing controller if available)
-    let humanController = controllersList.find(c => !c.isDemo && !c.gamepad) || controllersList[0];
+    let humanController =
+      controllersList.find((c) => !c.isDemo && !c.gamepad) ||
+      controllersList[0];
     if (!humanController) return; // cannot proceed
     if (!humanController.id) humanController.id = Int.random(1000000);
-    startMenu.playerList.push({ id: humanController.id, name: "p1", controller: humanController });
+    startMenu.playerList.push({
+      id: humanController.id,
+      name: "p1",
+      controller: humanController,
+    });
     startMenu.humanCount = 1;
   }
   // Add bots until we have 6 total players (1 human + 5 bots)
@@ -1741,10 +1751,12 @@ class SteeringController {
         const constrained = [];
         for (let d of walkable) {
           const dd = deltas[d];
-            const nx = cx + dd.x;
-            const ny = cy + dd.y;
-            const dist = Math.abs(nx - this.wanderOrigin.x) + Math.abs(ny - this.wanderOrigin.y);
-            if (dist <= this.wanderRadius) constrained.push(d);
+          const nx = cx + dd.x;
+          const ny = cy + dd.y;
+          const dist =
+            Math.abs(nx - this.wanderOrigin.x) +
+            Math.abs(ny - this.wanderOrigin.y);
+          if (dist <= this.wanderRadius) constrained.push(d);
         }
         if (walkable.length) {
           const pickFrom = constrained.length ? constrained : walkable;
@@ -1757,7 +1769,9 @@ class SteeringController {
         // If we drifted outside radius, force choose a direction inward next tick
         const cx = Math.round(selfSprite.x / 16);
         const cy = Math.round(selfSprite.y / 16);
-        const distNow = Math.abs(cx - this.wanderOrigin.x) + Math.abs(cy - this.wanderOrigin.y);
+        const distNow =
+          Math.abs(cx - this.wanderOrigin.x) +
+          Math.abs(cy - this.wanderOrigin.y);
         if (distNow > this.wanderRadius) this.wanderTimer = 0;
       }
       chooseWalk(this.wanderDir);
