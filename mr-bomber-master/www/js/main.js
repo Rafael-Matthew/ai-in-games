@@ -698,7 +698,8 @@ function newMap(index = -1) {
       powerUps: [],
       monsters: [],
       time: 60, // shorter intro round
-      fin: defaultFin, // reuse existing apocalypse pattern
+      fin: defaultFin, // pattern ignored when apocalypseDisabled true
+      apocalypseDisabled: true,
     };
     levelAssets = assets.levels[0]; // reuse first level assets for blank
     mapIndex = 0; // display background 0 but logical is blank
@@ -1462,8 +1463,8 @@ function startGame(playerList) {
   }
 
   map.spawnMonsters(maps[mapIndex].monsters);
-  // Increment round counter after setting up map; first round (0) stays blank without monsters
-  roundNumber++;
+  // Increment round counter only for real (non-demo) games so demo loop doesn't consume the blank first round
+  if (!isDemo) roundNumber++;
 
   music.next();
 }

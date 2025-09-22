@@ -72,3 +72,6 @@ const States = {
 
 // Maximum number of human + bot players allowed in a match
 const MAX_PLAYERS = 8;
+
+// Feature flags
+const APOCALYPSE_ENABLED = true; // global enable; first round still overridden to off dynamically
