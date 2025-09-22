@@ -1152,7 +1152,8 @@ let fade = {
 };
 
 function drawAll(interpolationPercentage) {
-  const colors = ["magenta", "red", "blue", "green"];
+  // Extended color list for up to 8 players
+  const colors = ["magenta", "red", "blue", "green", "yellow", "cyan", "orange", "white"];
 
   if (state == States.game) {
     if (mapIndex == 3) {
@@ -1257,23 +1258,25 @@ function drawAll(interpolationPercentage) {
     }
   } else if (state == States.start) {
     assets.start.draw(ctx, 0, 0);
-    // Only show the first (top) row: 4 slots total
-    for (let x = 0; x < 4; x++) {
-      const index = x; // 0..3
-      const color = colors[Int.divFloor(index, 2)];
-      const player = startMenu.playerList[index];
-      const baseY = 78; // top row Y
+    // Show 8 slots: two rows of 4 (indices 0-3 top, 4-7 bottom)
+    for (let i = 0; i < 8; i++) {
+      const row = Int.divFloor(i, 4); // 0 or 1
+      const col = i % 4;
+      const color = colors[Int.divFloor(i, 2)];
+      const player = startMenu.playerList[i];
+      const baseY = row == 0 ? 78 : 78 + 72; // second row offset
+      const baseX = col * 80;
       if (player) {
-        drawString(ctx, 13 + x * 80, baseY, "name ?", color);
-        drawString(ctx, 21 + x * 80, baseY + 10, player.name, color);
+        drawString(ctx, 13 + baseX, baseY, "name ?", color);
+        drawString(ctx, 21 + baseX, baseY + 10, player.name, color);
       } else if (Int.mod(menustep, 4) == 0) {
-        drawString(ctx, x * 80 + 20, baseY, "join", color);
-        drawString(ctx, x * 80 + 28, baseY + 10, "us", color);
-        drawString(ctx, x * 80 + 28, baseY + 20, "!!", color);
+        drawString(ctx, baseX + 20, baseY, "join", color);
+        drawString(ctx, baseX + 28, baseY + 10, "us", color);
+        drawString(ctx, baseX + 28, baseY + 20, "!!", color);
       } else if (Int.mod(menustep, 4) == 2) {
-        drawString(ctx, x * 80 + 20, baseY, "push", color);
-        drawString(ctx, x * 80 + 20, baseY + 10, "fire", color);
-        drawString(ctx, x * 80 + 28, baseY + 20, "!!", color);
+        drawString(ctx, baseX + 20, baseY, "push", color);
+        drawString(ctx, baseX + 20, baseY + 10, "fire", color);
+        drawString(ctx, baseX + 28, baseY + 20, "!!", color);
       }
     }
     menustep += 1 / 100;

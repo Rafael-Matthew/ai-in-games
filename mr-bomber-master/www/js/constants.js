@@ -71,4 +71,4 @@ const States = {
 };
 
 // Maximum number of human + bot players allowed in a match
-const MAX_PLAYERS = 4;
+const MAX_PLAYERS = 8;
