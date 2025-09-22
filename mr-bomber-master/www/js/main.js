@@ -1038,18 +1038,26 @@ class StartMenu {
     // Target selection helper: always target first human (or first sprite) fallback
     const getSeekTarget = (self) => {
       // find a different sprite (prefer human) during lobby not available -> runtime will update after start
-      return sprites.find(s => s !== self && !s.isDie) || sprites[0];
+      return sprites.find((s) => s !== self && !s.isDie) || sprites[0];
     };
     if (botIndex === 1) {
-      controller = new SteeringController('seek', (self)=> getSeekTarget(self));
+      controller = new SteeringController("seek", (self) =>
+        getSeekTarget(self)
+      );
     } else if (botIndex === 2) {
-      controller = new SteeringController('flee', (self)=> getSeekTarget(self));
+      controller = new SteeringController("flee", (self) =>
+        getSeekTarget(self)
+      );
     } else if (botIndex === 3) {
-      controller = new SteeringController('arrive', (self)=> getSeekTarget(self));
+      controller = new SteeringController("arrive", (self) =>
+        getSeekTarget(self)
+      );
     } else if (botIndex === 4) {
-      controller = new SteeringController('wander');
+      controller = new SteeringController("wander");
     } else if (botIndex === 5) {
-      controller = new SteeringController('pursuit', (self)=> getSeekTarget(self));
+      controller = new SteeringController("pursuit", (self) =>
+        getSeekTarget(self)
+      );
     } else {
       controller = new IdleController();
     }
@@ -1644,8 +1652,8 @@ class SteeringController {
       const dx = Math.abs(tx - cx);
       const dy = Math.abs(ty - cy);
       options.sort((a, b) => {
-        const da = (a === PlayerKeys.Left || a === PlayerKeys.Right) ? dx : dy;
-        const db = (b === PlayerKeys.Left || b === PlayerKeys.Right) ? dx : dy;
+        const da = a === PlayerKeys.Left || a === PlayerKeys.Right ? dx : dy;
+        const db = b === PlayerKeys.Left || b === PlayerKeys.Right ? dx : dy;
         return db - da; // besar dulu
       });
       for (let dir of options) {
@@ -1672,19 +1680,27 @@ class SteeringController {
       return null;
     };
 
-    const targetSprite = this.getTargetSprite ? this.getTargetSprite(selfSprite) : null;
+    const targetSprite = this.getTargetSprite
+      ? this.getTargetSprite(selfSprite)
+      : null;
 
-    if (this.mode === 'wander') {
+    if (this.mode === "wander") {
       if (this.wanderTimer <= 0 || !this.wanderDir) {
-        const dirs = [PlayerKeys.Up, PlayerKeys.Down, PlayerKeys.Left, PlayerKeys.Right];
+        const dirs = [
+          PlayerKeys.Up,
+          PlayerKeys.Down,
+          PlayerKeys.Left,
+          PlayerKeys.Right,
+        ];
         const cx = Math.round(selfSprite.x / 16);
         const cy = Math.round(selfSprite.y / 16);
-        const walkable = dirs.filter(d => {
+        const walkable = dirs.filter((d) => {
           const dd = deltas[d];
           return map.isWalkable(cx + dd.x, cy + dd.y);
         });
         if (walkable.length) {
-          this.wanderDir = walkable[Math.floor(Math.random()*walkable.length)];
+          this.wanderDir =
+            walkable[Math.floor(Math.random() * walkable.length)];
         }
         this.wanderTimer = 30; // frames
       } else {
@@ -1698,24 +1714,24 @@ class SteeringController {
     const tx = Math.round(targetSprite.x / 16);
     const ty = Math.round(targetSprite.y / 16);
 
-    if (this.mode === 'seek') {
+    if (this.mode === "seek") {
       chooseWalk(pickDirToward(tx, ty));
-    } else if (this.mode === 'flee') {
+    } else if (this.mode === "flee") {
       const dir = pickDirAway(tx, ty) || pickDirToward(tx, ty); // fallback
       chooseWalk(dir);
-    } else if (this.mode === 'arrive') {
+    } else if (this.mode === "arrive") {
       // Arrive sederhana: jika jauh pakai seek, jika dekat berhenti
       const cx = Math.round(selfSprite.x / 16);
       const cy = Math.round(selfSprite.y / 16);
       const dist = Math.abs(cx - tx) + Math.abs(cy - ty);
       if (dist > 2) chooseWalk(pickDirToward(tx, ty));
       // else diam
-    } else if (this.mode === 'pursuit') {
+    } else if (this.mode === "pursuit") {
       // Prediksi posisi target berdasarkan pergerakan tile sebelumnya (simpan last)
-      if (!this._lastTargetPos) this._lastTargetPos = {x: tx, y: ty};
+      if (!this._lastTargetPos) this._lastTargetPos = { x: tx, y: ty };
       const vx = tx - this._lastTargetPos.x;
       const vy = ty - this._lastTargetPos.y;
-      this._lastTargetPos = {x: tx, y: ty};
+      this._lastTargetPos = { x: tx, y: ty };
       // Lead time 3 tile
       const px = tx + vx * 3;
       const py = ty + vy * 3;
