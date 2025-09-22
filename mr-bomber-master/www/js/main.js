@@ -1033,10 +1033,29 @@ class StartMenu {
 
   addBot() {
     if (this.playerList.length >= 8) return; // max players
-    const controller = new IdleController();
+    const botIndex = this.botCount + 1; // 1-based
+    let controller;
+    // Target selection helper: always target first human (or first sprite) fallback
+    const getSeekTarget = (self) => {
+      // find a different sprite (prefer human) during lobby not available -> runtime will update after start
+      return sprites.find(s => s !== self && !s.isDie) || sprites[0];
+    };
+    if (botIndex === 1) {
+      controller = new SteeringController('seek', (self)=> getSeekTarget(self));
+    } else if (botIndex === 2) {
+      controller = new SteeringController('flee', (self)=> getSeekTarget(self));
+    } else if (botIndex === 3) {
+      controller = new SteeringController('arrive', (self)=> getSeekTarget(self));
+    } else if (botIndex === 4) {
+      controller = new SteeringController('wander');
+    } else if (botIndex === 5) {
+      controller = new SteeringController('pursuit', (self)=> getSeekTarget(self));
+    } else {
+      controller = new IdleController();
+    }
     const id = Int.random(1000000);
     controller.id = id;
-    const name = "bot" + (this.botCount + 1); // lowercase to match available alphabet sprites
+    const name = "bot" + botIndex;
     this.playerList.push({ id: id, name: name, controller: controller });
     this.botCount++;
     soundManager.playSound("addplayer");
@@ -1576,6 +1595,132 @@ class IdleController {
   playerKeys;
   constructor() {
     this.playerKeys = []; // never set movement or bomb keys
+  }
+}
+
+// SteeringController untuk berbagai perilaku: seek, flee, arrive, wander, pursuit
+class SteeringController {
+  constructor(mode, getTargetSprite) {
+    this.mode = mode; // 'seek','flee','arrive','wander','pursuit'
+    this.playerKeys = [];
+    this.getTargetSprite = getTargetSprite; // function returning a sprite (untuk pursuit / seek / flee / arrive)
+    // wander state
+    this.wanderDir = null; // salah satu PlayerKeys
+    this.wanderTimer = 0;
+  }
+
+  update() {
+    this.playerKeys = [];
+    const selfSprite = sprites.find((s) => s.controller === this);
+    if (!selfSprite || !map) return;
+
+    // Helper convert direction enum to dx,dy
+    const deltas = {
+      [PlayerKeys.Up]: { x: 0, y: -1 },
+      [PlayerKeys.Down]: { x: 0, y: 1 },
+      [PlayerKeys.Left]: { x: -1, y: 0 },
+      [PlayerKeys.Right]: { x: 1, y: 0 },
+    };
+
+    const chooseWalk = (dir) => {
+      if (!dir) return;
+      const d = deltas[dir];
+      const cx = Math.round(selfSprite.x / 16);
+      const cy = Math.round(selfSprite.y / 16);
+      if (map.isWalkable(cx + d.x, cy + d.y)) {
+        this.playerKeys[dir] = true;
+      }
+    };
+
+    const pickDirToward = (tx, ty) => {
+      const cx = Math.round(selfSprite.x / 16);
+      const cy = Math.round(selfSprite.y / 16);
+      const options = [];
+      if (ty < cy) options.push(PlayerKeys.Up);
+      if (ty > cy) options.push(PlayerKeys.Down);
+      if (tx < cx) options.push(PlayerKeys.Left);
+      if (tx > cx) options.push(PlayerKeys.Right);
+      // Prioritize axis with larger distance
+      const dx = Math.abs(tx - cx);
+      const dy = Math.abs(ty - cy);
+      options.sort((a, b) => {
+        const da = (a === PlayerKeys.Left || a === PlayerKeys.Right) ? dx : dy;
+        const db = (b === PlayerKeys.Left || b === PlayerKeys.Right) ? dx : dy;
+        return db - da; // besar dulu
+      });
+      for (let dir of options) {
+        const d = deltas[dir];
+        if (map.isWalkable(cx + d.x, cy + d.y)) return dir;
+      }
+      return null;
+    };
+
+    const pickDirAway = (tx, ty) => {
+      const toward = pickDirToward(tx, ty);
+      if (!toward) return null;
+      const opposite = {
+        [PlayerKeys.Up]: PlayerKeys.Down,
+        [PlayerKeys.Down]: PlayerKeys.Up,
+        [PlayerKeys.Left]: PlayerKeys.Right,
+        [PlayerKeys.Right]: PlayerKeys.Left,
+      };
+      const opp = opposite[toward];
+      const d = deltas[opp];
+      const cx = Math.round(selfSprite.x / 16);
+      const cy = Math.round(selfSprite.y / 16);
+      if (d && map.isWalkable(cx + d.x, cy + d.y)) return opp;
+      return null;
+    };
+
+    const targetSprite = this.getTargetSprite ? this.getTargetSprite(selfSprite) : null;
+
+    if (this.mode === 'wander') {
+      if (this.wanderTimer <= 0 || !this.wanderDir) {
+        const dirs = [PlayerKeys.Up, PlayerKeys.Down, PlayerKeys.Left, PlayerKeys.Right];
+        const cx = Math.round(selfSprite.x / 16);
+        const cy = Math.round(selfSprite.y / 16);
+        const walkable = dirs.filter(d => {
+          const dd = deltas[d];
+          return map.isWalkable(cx + dd.x, cy + dd.y);
+        });
+        if (walkable.length) {
+          this.wanderDir = walkable[Math.floor(Math.random()*walkable.length)];
+        }
+        this.wanderTimer = 30; // frames
+      } else {
+        this.wanderTimer--;
+      }
+      chooseWalk(this.wanderDir);
+      return;
+    }
+
+    if (!targetSprite) return; // behavior but no target yet
+    const tx = Math.round(targetSprite.x / 16);
+    const ty = Math.round(targetSprite.y / 16);
+
+    if (this.mode === 'seek') {
+      chooseWalk(pickDirToward(tx, ty));
+    } else if (this.mode === 'flee') {
+      const dir = pickDirAway(tx, ty) || pickDirToward(tx, ty); // fallback
+      chooseWalk(dir);
+    } else if (this.mode === 'arrive') {
+      // Arrive sederhana: jika jauh pakai seek, jika dekat berhenti
+      const cx = Math.round(selfSprite.x / 16);
+      const cy = Math.round(selfSprite.y / 16);
+      const dist = Math.abs(cx - tx) + Math.abs(cy - ty);
+      if (dist > 2) chooseWalk(pickDirToward(tx, ty));
+      // else diam
+    } else if (this.mode === 'pursuit') {
+      // Prediksi posisi target berdasarkan pergerakan tile sebelumnya (simpan last)
+      if (!this._lastTargetPos) this._lastTargetPos = {x: tx, y: ty};
+      const vx = tx - this._lastTargetPos.x;
+      const vy = ty - this._lastTargetPos.y;
+      this._lastTargetPos = {x: tx, y: ty};
+      // Lead time 3 tile
+      const px = tx + vx * 3;
+      const py = ty + vy * 3;
+      chooseWalk(pickDirToward(px, py) || pickDirToward(tx, ty));
+    }
   }
 }
 
