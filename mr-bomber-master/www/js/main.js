@@ -703,7 +703,9 @@ function newMap(index = -1) {
     levelAssets = assets.levels[0]; // reuse first level assets for blank
     mapIndex = 0; // display background 0 but logical is blank
     const rv = new Terrain(blankMap);
-    rv.soundCallback = function (sound) { soundManager.playSound(sound); };
+    rv.soundCallback = function (sound) {
+      soundManager.playSound(sound);
+    };
     return rv;
   }
   if (args.includes("-l")) {
