@@ -1706,7 +1706,8 @@ class SteeringController {
       // Caching: gunakan hasil 15 frame jika target masih di tile sama.
       if (!this._pathCache) this._pathCache = {};
       const cacheKey = cx + "," + cy + ":" + tx + "," + ty;
-      const frameNow = (typeof performance !== 'undefined' ? performance.now() : Date.now());
+      const frameNow =
+        typeof performance !== "undefined" ? performance.now() : Date.now();
       // simple time-based expiry (approx frame grouping) atau jika cache diset  sebelumnya
       const cached = this._pathCache[cacheKey];
       if (cached && frameNow - cached.t < 250) {
@@ -1745,8 +1746,16 @@ class SteeringController {
         if (closed.has(ck)) continue;
         closed.add(ck);
         expanded++;
-        if (current.x === tx && current.y === ty) { found = current; break; }
-        for (let dir of [PlayerKeys.Up, PlayerKeys.Down, PlayerKeys.Left, PlayerKeys.Right]) {
+        if (current.x === tx && current.y === ty) {
+          found = current;
+          break;
+        }
+        for (let dir of [
+          PlayerKeys.Up,
+          PlayerKeys.Down,
+          PlayerKeys.Left,
+          PlayerKeys.Right,
+        ]) {
           const d = deltas[dir];
           const nx = current.x + d.x;
           const ny = current.y + d.y;
@@ -1755,7 +1764,7 @@ class SteeringController {
           if (!map.isWalkable(nx, ny)) continue;
           const tentativeG = current.g + 1;
           const prevG = gScore.has(nk) ? gScore.get(nk) : Infinity;
-            if (tentativeG < prevG) {
+          if (tentativeG < prevG) {
             cameFrom.set(nk, { x: current.x, y: current.y });
             gScore.set(nk, tentativeG);
             const f = tentativeG + h(nx, ny);
@@ -1888,9 +1897,14 @@ class SteeringController {
       const cy = Math.round(selfSprite.y / 16);
       if (!isOccupiedByOther(cx, cy, proposedDir)) return proposedDir;
       // Cari alternatif lain yang masih mendekati (untuk seek/arrive/pursuit) atau menjauh (flee)
-      const candidateDirs = [PlayerKeys.Up, PlayerKeys.Down, PlayerKeys.Left, PlayerKeys.Right];
+      const candidateDirs = [
+        PlayerKeys.Up,
+        PlayerKeys.Down,
+        PlayerKeys.Left,
+        PlayerKeys.Right,
+      ];
       // Filter walkable dan tidak ditempati
-      const free = candidateDirs.filter(d => {
+      const free = candidateDirs.filter((d) => {
         const delta = deltas[d];
         const nx = cx + delta.x;
         const ny = cy + delta.y;
@@ -1898,7 +1912,7 @@ class SteeringController {
       });
       if (!free.length) return proposedDir; // tidak ada opsi lain
       // Heuristik sesuai mode
-      if (this.mode === 'flee') {
+      if (this.mode === "flee") {
         // pilih yang paling jauh dari target
         let best = proposedDir;
         let bd = -1;
@@ -1907,7 +1921,10 @@ class SteeringController {
           const nx = cx + delta.x;
           const ny = cy + delta.y;
           const dist = Math.abs(nx - tx) + Math.abs(ny - ty);
-          if (dist > bd) { bd = dist; best = d; }
+          if (dist > bd) {
+            bd = dist;
+            best = d;
+          }
         }
         return best;
       } else {
@@ -1918,8 +1935,11 @@ class SteeringController {
           const delta = deltas[d];
           const nx = cx + delta.x;
           const ny = cy + delta.y;
-            const dist = Math.abs(nx - tx) + Math.abs(ny - ty);
-          if (dist < bd) { bd = dist; best = d; }
+          const dist = Math.abs(nx - tx) + Math.abs(ny - ty);
+          if (dist < bd) {
+            bd = dist;
+            best = d;
+          }
         }
         return best;
       }
@@ -1935,7 +1955,12 @@ class SteeringController {
       const cy = Math.round(selfSprite.y / 16);
       let bestDir = null;
       let bestDist = -1;
-      for (let dir of [PlayerKeys.Up, PlayerKeys.Down, PlayerKeys.Left, PlayerKeys.Right]) {
+      for (let dir of [
+        PlayerKeys.Up,
+        PlayerKeys.Down,
+        PlayerKeys.Left,
+        PlayerKeys.Right,
+      ]) {
         const d = deltas[dir];
         const nx = cx + d.x;
         const ny = cy + d.y;
@@ -1954,9 +1979,14 @@ class SteeringController {
       const PANIC_RADIUS = 5; // jika dalam radius ini, selalu coba bergerak menjauh
       if (fleeOriginDist <= PANIC_RADIUS) {
         // Pastikan benar-benar menjauh: evaluasi dua langkah ke depan jika mungkin
-        let candidates = [PlayerKeys.Up, PlayerKeys.Down, PlayerKeys.Left, PlayerKeys.Right].filter(k => map.isWalkable(cx + deltas[k].x, cy + deltas[k].y));
+        let candidates = [
+          PlayerKeys.Up,
+          PlayerKeys.Down,
+          PlayerKeys.Left,
+          PlayerKeys.Right,
+        ].filter((k) => map.isWalkable(cx + deltas[k].x, cy + deltas[k].y));
         // Skor: jarak setelah langkah + sedikit random agar tidak sinkron dengan bot lain
-        const scored = candidates.map(k => {
+        const scored = candidates.map((k) => {
           const nx = cx + deltas[k].x;
           const ny = cy + deltas[k].y;
           const d1 = Math.abs(nx - tx) + Math.abs(ny - ty);
@@ -1964,21 +1994,29 @@ class SteeringController {
           let d2 = d1;
           const nx2 = nx + deltas[k].x;
           const ny2 = ny + deltas[k].y;
-            if (map.isWalkable(nx2, ny2)) {
+          if (map.isWalkable(nx2, ny2)) {
             d2 = Math.abs(nx2 - tx) + Math.abs(ny2 - ty);
           }
           const noise = Math.random() * 0.3; // variasi kecil
           return { k, score: d2 + noise };
         });
         if (scored.length) {
-          scored.sort((a,b) => b.score - a.score);
+          scored.sort((a, b) => b.score - a.score);
           dir = scored[0].k;
         }
       } else {
         // Di luar panic radius: sekali-sekali (10%) ubah arah untuk menghindari buntu
         if (Math.random() < 0.1) {
-          const alt = [PlayerKeys.Up, PlayerKeys.Down, PlayerKeys.Left, PlayerKeys.Right]
-            .filter(k => k !== dir && map.isWalkable(cx + deltas[k].x, cy + deltas[k].y))
+          const alt = [
+            PlayerKeys.Up,
+            PlayerKeys.Down,
+            PlayerKeys.Left,
+            PlayerKeys.Right,
+          ]
+            .filter(
+              (k) =>
+                k !== dir && map.isWalkable(cx + deltas[k].x, cy + deltas[k].y)
+            )
             .sort(() => Math.random() - 0.5);
           if (alt.length) dir = alt[0];
         }
@@ -1993,12 +2031,16 @@ class SteeringController {
       if (!selfSprite.baseSpeed) selfSprite.baseSpeed = selfSprite.speed;
       if (dist > 6) {
         selfSprite.speed = selfSprite.baseSpeed;
-        let dir = pickDirToward(tx, ty); dir = applySeparation(dir); chooseWalk(dir);
+        let dir = pickDirToward(tx, ty);
+        dir = applySeparation(dir);
+        chooseWalk(dir);
       } else if (dist > 0) {
         // dist 1..6: skala linear; makin dekat makin lambat tapi tetap bergerak
         const factor = Math.max(0.25, dist / 6); // minimal 25%
         selfSprite.speed = selfSprite.baseSpeed * factor;
-        let dir = pickDirToward(tx, ty); dir = applySeparation(dir); chooseWalk(dir);
+        let dir = pickDirToward(tx, ty);
+        dir = applySeparation(dir);
+        chooseWalk(dir);
       } else {
         // sudah tepat di tile target -> tetap diam (speed dikembalikan agar siap jika target pindah)
         selfSprite.speed = selfSprite.baseSpeed;
@@ -2023,10 +2065,15 @@ class SteeringController {
 
       // Simpan history arah target untuk cek kestabilan
       if (!this._dirHistory) this._dirHistory = [];
-      const normDir = (vx === 0 && vy === 0) ? null : { x: Math.sign(vx), y: Math.sign(vy) };
+      const normDir =
+        vx === 0 && vy === 0 ? null : { x: Math.sign(vx), y: Math.sign(vy) };
       if (normDir) this._dirHistory.push(normDir);
       if (this._dirHistory.length > 5) this._dirHistory.shift();
-      const stable = this._dirHistory.length >= 3 && this._dirHistory.every(d => d.x === this._dirHistory[0].x && d.y === this._dirHistory[0].y);
+      const stable =
+        this._dirHistory.length >= 3 &&
+        this._dirHistory.every(
+          (d) => d.x === this._dirHistory[0].x && d.y === this._dirHistory[0].y
+        );
 
       // Lead adaptif: proporsi jarak / 4, dibatasi 0..3
       let lead = Math.min(3, Math.max(0, Math.floor(distNow / 4)));
@@ -2036,7 +2083,10 @@ class SteeringController {
       // Deteksi miss: jika dua frame terakhir jarak meningkat & lead > 0 -> kurangi agresivitas
       if (this._distHistory.length >= 3) {
         const L = this._distHistory.length;
-        if (this._distHistory[L-1] > this._distHistory[L-2] && this._distHistory[L-2] > this._distHistory[L-3]) {
+        if (
+          this._distHistory[L - 1] > this._distHistory[L - 2] &&
+          this._distHistory[L - 2] > this._distHistory[L - 3]
+        ) {
           // tiga kenaikan berturut -> miss
           if (!this._missFrames) this._missFrames = 0;
           this._missFrames++;
@@ -2189,8 +2239,8 @@ class Sprite {
 
     this.playerKeys = {};
 
-  this.speed = 1;
-  this.baseSpeed = 1; // simpan kecepatan dasar untuk behaviour arrive slow-down
+    this.speed = 1;
+    this.baseSpeed = 1; // simpan kecepatan dasar untuk behaviour arrive slow-down
 
     this.maxBoom = 1;
     this.maxBombsCount = 1;
