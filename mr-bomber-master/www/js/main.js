@@ -661,6 +661,7 @@ addEventListener("load", function () {
 });
 
 function newMap(index = -1) {
+  /*
   // First round override: force blank map with 8 spawn points, no monsters, no obstacles
   if (roundNumber === 0) {
     const blankWidth = 19; // keep consistent width for HUD layout
@@ -712,6 +713,7 @@ function newMap(index = -1) {
     };
     return rv;
   }
+  */
   if (args.includes("-l")) {
     index = parseInt(args[args.findIndex((v) => v == "-l") + 1]);
   }
