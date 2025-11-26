@@ -624,9 +624,7 @@ class Terrain {
     const width = map.width;
     const height = map.height;
     const INF = 9999;
-    const danger = Array.from({ length: height }, () =>
-      Array(width).fill(INF)
-    );
+    const danger = Array.from({ length: height }, () => Array(width).fill(INF));
     const directions = [
       { x: 0, y: -1 },
       { x: 0, y: 1 },
@@ -675,7 +673,11 @@ class Terrain {
 
   planSafePath(originX, originY, dangerGrid) {
     if (!map || !dangerGrid) {
-      return { path: [], nextDir: null, destination: { x: originX, y: originY } };
+      return {
+        path: [],
+        nextDir: null,
+        destination: { x: originX, y: originY },
+      };
     }
     const width = map.width;
     const height = map.height;
@@ -683,9 +685,7 @@ class Terrain {
       Array(width).fill(false)
     );
     const queue = [];
-    const prev = Array.from({ length: height }, () =>
-      Array(width).fill(null)
-    );
+    const prev = Array.from({ length: height }, () => Array(width).fill(null));
     queue.push({ x: originX, y: originY });
     visited[originY][originX] = true;
     const origin = { x: originX, y: originY };
@@ -1929,9 +1929,8 @@ class SteeringController {
     const dangerGrid = this.buildDangerGrid();
     const safePlan = this.planSafePath(tileX, tileY, dangerGrid);
     this.currentSafePlan = safePlan;
-    const currentDanger = dangerGrid && dangerGrid[tileY]
-      ? dangerGrid[tileY][tileX]
-      : Infinity;
+    const currentDanger =
+      dangerGrid && dangerGrid[tileY] ? dangerGrid[tileY][tileX] : Infinity;
     const forceEscape = currentDanger <= this.dangerThreshold;
 
     const enforceSafeDir = (dir) => {
@@ -2411,14 +2410,10 @@ class SteeringController {
       chooseWalk(dir);
     }
 
-    if (
-      this.shouldDropBomb(selfSprite, targetSprite, safePlan, dangerGrid)
-    ) {
+    if (this.shouldDropBomb(selfSprite, targetSprite, safePlan, dangerGrid)) {
       this.playerKeys[PlayerKeys.Bomb] = true;
       this.bombCooldown = 45;
-    } else if (
-      this.shouldClearObstacle(selfSprite, dangerGrid)
-    ) {
+    } else if (this.shouldClearObstacle(selfSprite, dangerGrid)) {
       this.playerKeys[PlayerKeys.Bomb] = true;
       this.bombCooldown = 60;
     }
@@ -2433,9 +2428,7 @@ class SteeringController {
     const width = map.width;
     const height = map.height;
     const INF = 9999;
-    const danger = Array.from({ length: height }, () =>
-      Array(width).fill(INF)
-    );
+    const danger = Array.from({ length: height }, () => Array(width).fill(INF));
     const directions = [
       { x: 0, y: -1 },
       { x: 0, y: 1 },
@@ -2484,7 +2477,11 @@ class SteeringController {
 
   planSafePath(originX, originY, dangerGrid) {
     if (!map || !dangerGrid) {
-      return { path: [], nextDir: null, destination: { x: originX, y: originY } };
+      return {
+        path: [],
+        nextDir: null,
+        destination: { x: originX, y: originY },
+      };
     }
     const width = map.width;
     const height = map.height;
@@ -2492,9 +2489,7 @@ class SteeringController {
       Array(width).fill(false)
     );
     const queue = [];
-    const prev = Array.from({ length: height }, () =>
-      Array(width).fill(null)
-    );
+    const prev = Array.from({ length: height }, () => Array(width).fill(null));
     queue.push({ x: originX, y: originY });
     visited[originY][originX] = true;
     const origin = { x: originX, y: originY };
