@@ -3,6 +3,7 @@ async function loadSoundAssets() {
 
     async function loadSound(name) {
         let audio = new Audio("sound/" + name + ".wav");
+        audio.volume = 0; // Force mute
         audio.loop = false;
 
         let result;
@@ -136,7 +137,7 @@ class MusicManager {
             }
 
             this.audio = new Audio(this.playlist[song]);
-            this.audio.volume = 0.7;
+            this.audio.volume = 0; // Force mute
             this.audio.loop = true;
             this.audio.play();
         }
