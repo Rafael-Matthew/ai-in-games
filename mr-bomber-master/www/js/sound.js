@@ -1,145 +1,147 @@
 async function loadSoundAssets() {
-    const poolSize = 4;
+  const poolSize = 4;
 
-    async function loadSound(name) {
-        let audio = new Audio("sound/" + name + ".wav");
-        audio.volume = 0; // Force mute
-        audio.loop = false;
+  async function loadSound(name) {
+    let audio = new Audio("sound/" + name + ".wav");
+    audio.volume = 0; // Force mute
+    audio.loop = false;
 
-        let result;
+    let result;
 
-        if (audio.readyState != 4) {
-            console.debug("audio (" + name + ") is not ready. Loading...");
-            result = new Promise((resolve, reject) => {
-                audio.oncanplaythrough = () => {
-                    console.debug("audio (" + name + ") loaded.");
-                    resolve(audio);
-                    audio.oncanplaythrough = null;
-                };
-
-                audio.onerror = () => {
-                    console.warn("audio (" + name + ") error.");
-                    reject();
-                    audio.onerror = null;
-                };
-            });
-        } else {
-            console.debug("audio (" + name + ") is ready.");
-            result = audio;
-        }
-
-        return result;
-    }
-
-    async function makeSoundPool(name) {
-        let pool = [];
-        for (let i = 0; i < poolSize; i++) {
-            pool.push(await loadSound(name));
-        }
-
-        return {
-            pool: pool,
-            play: function () {
-                let audio = this.pool.pop();
-
-                if (audio) {
-                    audio.loop = false;
-                    audio.onended = (event) => {
-                        console.debug("audio ended");
-                        this.pool.push(audio);
-                        audio.onended = undefined;
-                    };
-
-                    try {
-                        let promise = audio.play();
-                        if (promise) {
-                            promise.then(() => { }, () => {
-                                this.pool.push(audio);
-                            });
-                        }
-                    } catch(e) {
-                        this.pool.push(audio);
-                    }
-                } else {
-                    console.warn("Out of audio object for '" + name + "'");
-                }
-            }
+    if (audio.readyState != 4) {
+      console.debug("audio (" + name + ") is not ready. Loading...");
+      result = new Promise((resolve, reject) => {
+        audio.oncanplaythrough = () => {
+          console.debug("audio (" + name + ") loaded.");
+          resolve(audio);
+          audio.oncanplaythrough = null;
         };
-    }
 
-    sounds = [
-        "bang",
-        "posebomb",
-        "sac",
-        "pick",
-        "player_die",
-        "oioi",
-        "ai",
-        "addplayer",
-        "victory",
-        "draw",
-        "clock",
-        "time_end"
-    ]
-
-    let result = {};
-    for (let name of sounds) {
-        result[name] = await makeSoundPool(name);
+        audio.onerror = () => {
+          console.warn("audio (" + name + ") error.");
+          reject();
+          audio.onerror = null;
+        };
+      });
+    } else {
+      console.debug("audio (" + name + ") is ready.");
+      result = audio;
     }
 
     return result;
+  }
+
+  async function makeSoundPool(name) {
+    let pool = [];
+    for (let i = 0; i < poolSize; i++) {
+      pool.push(await loadSound(name));
+    }
+
+    return {
+      pool: pool,
+      play: function () {
+        let audio = this.pool.pop();
+
+        if (audio) {
+          audio.loop = false;
+          audio.onended = (event) => {
+            console.debug("audio ended");
+            this.pool.push(audio);
+            audio.onended = undefined;
+          };
+
+          try {
+            let promise = audio.play();
+            if (promise) {
+              promise.then(
+                () => {},
+                () => {
+                  this.pool.push(audio);
+                }
+              );
+            }
+          } catch (e) {
+            this.pool.push(audio);
+          }
+        } else {
+          console.warn("Out of audio object for '" + name + "'");
+        }
+      },
+    };
+  }
+
+  sounds = [
+    "bang",
+    "posebomb",
+    "sac",
+    "pick",
+    "player_die",
+    "oioi",
+    "ai",
+    "addplayer",
+    "victory",
+    "draw",
+    "clock",
+    "time_end",
+  ];
+
+  let result = {};
+  for (let name of sounds) {
+    result[name] = await makeSoundPool(name);
+  }
+
+  return result;
 }
 
 class SoundManager {
-    constructor() {
-    }
+  constructor() {}
 
-    async init() {
-        this.soundAssets = await loadSoundAssets();
-    }
+  async init() {
+    this.soundAssets = await loadSoundAssets();
+  }
 
-    playSound(name) {
-        return; // Sound muted temporarily
-        if (this.soundAssets && this.soundAssets[name]) {
-            this.soundAssets[name].play();
-        } else {
-            console.error("Can not find " + name + "sound in assets");
-        }
+  playSound(name) {
+    return; // Sound muted temporarily
+    if (this.soundAssets && this.soundAssets[name]) {
+      this.soundAssets[name].play();
+    } else {
+      console.error("Can not find " + name + "sound in assets");
     }
+  }
 }
 
 class MusicManager {
-    playlist;
-    audio;
-    constructor(playlist) {
-        this.playlist = playlist;
+  playlist;
+  audio;
+  constructor(playlist) {
+    this.playlist = playlist;
+  }
+
+  start(song) {
+    this.stop();
+    this.next(song);
+  }
+
+  stop() {
+    if (this.audio) {
+      this.audio.pause();
+      this.audio = null;
     }
+  }
 
-    start(song) {
-        this.stop();
-        this.next(song);
+  next(song) {
+    return; // Music muted temporarily
+    if (!args.includes("-z")) {
+      this.stop();
+
+      if (!song) {
+        song = Math.floor(Math.random() * this.playlist.length);
+      }
+
+      this.audio = new Audio(this.playlist[song]);
+      this.audio.volume = 0; // Force mute
+      this.audio.loop = true;
+      this.audio.play();
     }
-
-    stop() {
-        if (this.audio) {
-            this.audio.pause();
-            this.audio = null;
-        }
-    }
-
-    next(song) {
-        return; // Music muted temporarily
-        if (!args.includes("-z")) {
-            this.stop();
-
-            if (!song) {
-                song = Math.floor(Math.random() * this.playlist.length);
-            }
-
-            this.audio = new Audio(this.playlist[song]);
-            this.audio.volume = 0; // Force mute
-            this.audio.loop = true;
-            this.audio.play();
-        }
-    }
+  }
 }

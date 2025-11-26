@@ -1533,9 +1533,12 @@ function ensureAutoSpawnRoster(startMenu) {
     });
     startMenu.humanCount = 1;
   }
-  // Add bots until we have 6 total players (1 human + 5 bots)
-  while (startMenu.playerList.length < 6) {
-    startMenu.addBot();
+  // Only auto-fill bots if the user hasn't added any manually (playing alone)
+  // If user added bots (length > 1), respect their setup.
+  if (startMenu.playerList.length === 1) {
+    while (startMenu.playerList.length < 6) {
+      startMenu.addBot();
+    }
   }
 }
 
@@ -1660,6 +1663,7 @@ class SteeringController {
   }
 
   update() {
+    return; // STOP ALL BOT MOVEMENT
     this.playerKeys = [];
     const selfSprite = sprites.find((s) => s.controller === this);
     if (!selfSprite || !map) return;
