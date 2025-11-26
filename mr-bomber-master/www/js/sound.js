@@ -98,6 +98,7 @@ class SoundManager {
     }
 
     playSound(name) {
+        return; // Sound muted temporarily
         if (this.soundAssets && this.soundAssets[name]) {
             this.soundAssets[name].play();
         } else {
@@ -126,6 +127,7 @@ class MusicManager {
     }
 
     next(song) {
+        return; // Music muted temporarily
         if (!args.includes("-z")) {
             this.stop();
 
