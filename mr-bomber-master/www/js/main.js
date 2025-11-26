@@ -618,8 +618,6 @@ class Terrain {
   playSound(sound) {
     this.soundsToPlay[sound] = true;
   }
-
-
 }
 
 // Source: https://en.wikipedia.org/wiki/Pseudorandom_number_generator#Implementation
@@ -2333,7 +2331,11 @@ class SteeringController {
     // 1. Line of Sight Attack
     const sameRow = sy === ty;
     const sameCol = sx === tx;
-    if ((sameRow || sameCol) && dist <= selfSprite.maxBoom && this.hasLineOfSight(sx, sy, tx, ty)) {
+    if (
+      (sameRow || sameCol) &&
+      dist <= selfSprite.maxBoom &&
+      this.hasLineOfSight(sx, sy, tx, ty)
+    ) {
       shouldAttack = true;
     }
 
@@ -2358,7 +2360,7 @@ class SteeringController {
     const height = map.height;
     const visited = new Set();
     const queue = [];
-    
+
     // Starting state: {x, y, steps}
     queue.push({ x: sx, y: sy, steps: 0 });
     visited.add(sx + "," + sy);
@@ -2401,7 +2403,7 @@ class SteeringController {
       // So if we are behind a PermanentWall, we are safe.
       // But checking "behind wall" is complex.
       // The simple "off-axis or out-of-range" check is sufficient for 90% of cases.
-      
+
       if (isSafe) return true;
 
       if (node.steps >= maxDepth) continue;
@@ -2409,13 +2411,13 @@ class SteeringController {
       for (let d of deltas) {
         const nx = node.x + d.x;
         const ny = node.y + d.y;
-        
+
         if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
         if (!map.isWalkable(nx, ny)) continue;
-        
+
         const key = nx + "," + ny;
         if (visited.has(key)) continue;
-        
+
         visited.add(key);
         queue.push({ x: nx, y: ny, steps: node.steps + 1 });
       }
@@ -2482,7 +2484,7 @@ class SteeringController {
       }
     }
     if (!hasTarget) return false;
-    
+
     // Use strict safety check with currentSafePlan
     return this.isSafeFromProposedBomb(sx, sy, selfSprite.maxBoom);
   }
