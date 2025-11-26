@@ -619,246 +619,7 @@ class Terrain {
     this.soundsToPlay[sound] = true;
   }
 
-  buildDangerGrid() {
-    if (!map) return null;
-    const width = map.width;
-    const height = map.height;
-    const INF = 9999;
-    const danger = Array.from({ length: height }, () => Array(width).fill(INF));
-    const directions = [
-      { x: 0, y: -1 },
-      { x: 0, y: 1 },
-      { x: -1, y: 0 },
-      { x: 1, y: 0 },
-    ];
 
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        const cell = map.getCell(x, y);
-        if (!cell) continue;
-        if (cell.type === TerrainType.Apocalypse) {
-          danger[y][x] = 0;
-          continue;
-        }
-        if (cell.type === TerrainType.PowerUpFire) {
-          danger[y][x] = 0;
-          continue;
-        }
-        if (cell.type === TerrainType.Bomb) {
-          const fuse = Math.max(0, cell.bombTime ?? 0);
-          const radius = cell.maxBoom ?? 1;
-          danger[y][x] = Math.min(danger[y][x], fuse);
-          for (let dir of directions) {
-            for (let step = 1; step <= radius; step++) {
-              const nx = x + dir.x * step;
-              const ny = y + dir.y * step;
-              const targetCell = map.getCell(nx, ny);
-              if (!targetCell) break;
-              if (targetCell.type === TerrainType.PermanentWall) break;
-              danger[ny][nx] = Math.min(danger[ny][nx], fuse);
-              if (
-                targetCell.type === TerrainType.TemporaryWall ||
-                targetCell.type === TerrainType.Bomb ||
-                targetCell.type === TerrainType.Apocalypse
-              ) {
-                break;
-              }
-            }
-          }
-        }
-      }
-    }
-    return danger;
-  }
-
-  planSafePath(originX, originY, dangerGrid) {
-    if (!map || !dangerGrid) {
-      return {
-        path: [],
-        nextDir: null,
-        destination: { x: originX, y: originY },
-      };
-    }
-    const width = map.width;
-    const height = map.height;
-    const visited = Array.from({ length: height }, () =>
-      Array(width).fill(false)
-    );
-    const queue = [];
-    const prev = Array.from({ length: height }, () => Array(width).fill(null));
-    queue.push({ x: originX, y: originY });
-    visited[originY][originX] = true;
-    const origin = { x: originX, y: originY };
-    let bestNode = { x: originX, y: originY };
-    let bestScore = this.scoreTile(originX, originY, dangerGrid, origin);
-    const neighborDefs = [
-      { dir: PlayerKeys.Up, dx: 0, dy: -1 },
-      { dir: PlayerKeys.Down, dx: 0, dy: 1 },
-      { dir: PlayerKeys.Left, dx: -1, dy: 0 },
-      { dir: PlayerKeys.Right, dx: 1, dy: 0 },
-    ];
-
-    while (queue.length) {
-      const node = queue.shift();
-      for (let n of neighborDefs) {
-        const nx = node.x + n.dx;
-        const ny = node.y + n.dy;
-        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
-        if (visited[ny][nx]) continue;
-        if (!map.isWalkable(nx, ny)) continue;
-        const tileDanger = dangerGrid[ny][nx];
-        if (tileDanger <= 5) continue;
-        visited[ny][nx] = true;
-        prev[ny][nx] = { x: node.x, y: node.y, dir: n.dir };
-        queue.push({ x: nx, y: ny });
-        const score = this.scoreTile(nx, ny, dangerGrid, origin);
-        if (score > bestScore) {
-          bestScore = score;
-          bestNode = { x: nx, y: ny };
-        }
-      }
-    }
-
-    const path = [];
-    let cursor = bestNode;
-    while (cursor.x !== originX || cursor.y !== originY) {
-      const step = prev[cursor.y]?.[cursor.x];
-      if (!step) break;
-      path.push(step.dir);
-      cursor = { x: step.x, y: step.y };
-    }
-    path.reverse();
-    return {
-      path,
-      nextDir: path.length ? path[0] : null,
-      destination: bestNode,
-      score: bestScore,
-    };
-  }
-
-  scoreTile(x, y, dangerGrid, origin) {
-    const baseDanger = dangerGrid[y] ? dangerGrid[y][x] : 0;
-    let score = baseDanger === 9999 ? 9999 : baseDanger;
-    const cell = map.getCell(x, y);
-    if (cell && cell.type === TerrainType.PowerUp) score += 120;
-    if (cell && cell.type === TerrainType.Free) score += 10;
-    if (cell && cell.type === TerrainType.Rubber) score -= 10;
-    const dist = Math.abs(x - origin.x) + Math.abs(y - origin.y);
-    score -= dist * 2;
-    return score;
-  }
-
-  shouldDropBomb(selfSprite, targetSprite, safePlan, dangerGrid) {
-    if (!targetSprite || !safePlan || !dangerGrid) return false;
-    if (this.bombCooldown > 0) return false;
-    if (selfSprite.bombsPlaced >= selfSprite.maxBombsCount) return false;
-    const sx = Math.round(selfSprite.x / 16);
-    const sy = Math.round(selfSprite.y / 16);
-    const tx = Math.round(targetSprite.x / 16);
-    const ty = Math.round(targetSprite.y / 16);
-    const sameRow = sy === ty;
-    const sameCol = sx === tx;
-    if (!sameRow && !sameCol) return false;
-    if (!this.hasLineOfSight(sx, sy, tx, ty)) return false;
-    if (!safePlan.path || !safePlan.path.length) return false;
-    const dir = safePlan.path[0];
-    if (dir == null) {
-      if (!this.safeStepExists(sx, sy, dangerGrid)) return false;
-    }
-    const deltas = {
-      [PlayerKeys.Up]: { x: 0, y: -1 },
-      [PlayerKeys.Down]: { x: 0, y: 1 },
-      [PlayerKeys.Left]: { x: -1, y: 0 },
-      [PlayerKeys.Right]: { x: 1, y: 0 },
-    };
-    if (dir != null) {
-      const step = deltas[dir];
-      if (!step) return false;
-      const nx = sx + step.x;
-      const ny = sy + step.y;
-      const destDanger = dangerGrid[ny] ? dangerGrid[ny][nx] : Infinity;
-      if (destDanger <= this.stepDangerBuffer) return false;
-    }
-    return true;
-  }
-
-  hasLineOfSight(x1, y1, x2, y2) {
-    if (!map) return false;
-    if (x1 === x2) {
-      const minY = Math.min(y1, y2);
-      const maxY = Math.max(y1, y2);
-      for (let y = minY + 1; y < maxY; y++) {
-        const cell = map.getCell(x1, y);
-        if (
-          cell.type === TerrainType.PermanentWall ||
-          cell.type === TerrainType.TemporaryWall
-        ) {
-          return false;
-        }
-      }
-      return true;
-    }
-    if (y1 === y2) {
-      const minX = Math.min(x1, x2);
-      const maxX = Math.max(x1, x2);
-      for (let x = minX + 1; x < maxX; x++) {
-        const cell = map.getCell(x, y1);
-        if (
-          cell.type === TerrainType.PermanentWall ||
-          cell.type === TerrainType.TemporaryWall
-        ) {
-          return false;
-        }
-      }
-      return true;
-    }
-    return false;
-  }
-
-  shouldClearObstacle(selfSprite, dangerGrid) {
-    if (!map || !dangerGrid) return false;
-    if (this.bombCooldown > 0) return false;
-    if (selfSprite.bombsPlaced >= selfSprite.maxBombsCount) return false;
-    const sx = Math.round(selfSprite.x / 16);
-    const sy = Math.round(selfSprite.y / 16);
-    const neighbors = [
-      { dx: 0, dy: -1 },
-      { dx: 0, dy: 1 },
-      { dx: -1, dy: 0 },
-      { dx: 1, dy: 0 },
-    ];
-    let hasTarget = false;
-    for (let n of neighbors) {
-      const cell = map.getCell(sx + n.dx, sy + n.dy);
-      if (!cell) continue;
-      if (
-        cell.type === TerrainType.TemporaryWall ||
-        cell.type === TerrainType.PowerUp
-      ) {
-        hasTarget = true;
-        break;
-      }
-    }
-    if (!hasTarget) return false;
-    return this.safeStepExists(sx, sy, dangerGrid);
-  }
-
-  safeStepExists(x, y, dangerGrid) {
-    const options = [
-      { dx: 0, dy: -1 },
-      { dx: 0, dy: 1 },
-      { dx: -1, dy: 0 },
-      { dx: 1, dy: 0 },
-    ];
-    for (let o of options) {
-      const nx = x + o.dx;
-      const ny = y + o.dy;
-      if (!map.isWalkable(nx, ny)) continue;
-      const danger = dangerGrid[ny] ? dangerGrid[ny][nx] : Infinity;
-      if (danger > this.stepDangerBuffer) return true;
-    }
-    return false;
-  }
 }
 
 // Source: https://en.wikipedia.org/wiki/Pseudorandom_number_generator#Implementation
@@ -1904,7 +1665,7 @@ class SteeringController {
     this.wanderTimer = 0;
     this.wanderOrigin = null; // {x,y} tile spawn location for wander confinement
     this.wanderRadius = 5; // tiles
-    this.dangerThreshold = 45;
+    this.dangerThreshold = 300; // High threshold: treat any bomb radius as immediate danger
     this.stepDangerBuffer = 20;
     this.bombCooldown = 0;
     this.currentSafePlan = null;
@@ -1975,9 +1736,16 @@ class SteeringController {
       }
     };
 
-    if (forceEscape && safePlan && safePlan.nextDir != null) {
-      chooseWalk(safePlan.nextDir);
-      return;
+    // PRIORITY 1: ESCAPE
+    if (forceEscape) {
+      if (safePlan && safePlan.nextDir != null) {
+        chooseWalk(safePlan.nextDir);
+      } else {
+        // Fallback: try to find any neighbor that is safer
+        const bestStep = this.getSafeStep(tileX, tileY, dangerGrid);
+        if (bestStep) chooseWalk(bestStep);
+      }
+      return; // Stop processing other behaviors if escaping
     }
 
     const pickDirToward = (tx, ty) => {
@@ -2444,10 +2212,7 @@ class SteeringController {
           danger[y][x] = 0;
           continue;
         }
-        if (cell.type === TerrainType.PowerUpFire) {
-          danger[y][x] = 0;
-          continue;
-        }
+        // PowerUpFire is good, do not treat as danger!
         if (cell.type === TerrainType.Bomb) {
           const fuse = Math.max(0, cell.bombTime ?? 0);
           const radius = cell.maxBoom ?? 1;
@@ -2556,34 +2321,107 @@ class SteeringController {
     if (!targetSprite || !safePlan || !dangerGrid) return false;
     if (this.bombCooldown > 0) return false;
     if (selfSprite.bombsPlaced >= selfSprite.maxBombsCount) return false;
+
     const sx = Math.round(selfSprite.x / 16);
     const sy = Math.round(selfSprite.y / 16);
     const tx = Math.round(targetSprite.x / 16);
     const ty = Math.round(targetSprite.y / 16);
+    const dist = Math.abs(sx - tx) + Math.abs(sy - ty);
+
+    let shouldAttack = false;
+
+    // 1. Line of Sight Attack
     const sameRow = sy === ty;
     const sameCol = sx === tx;
-    if (!sameRow && !sameCol) return false;
-    if (!this.hasLineOfSight(sx, sy, tx, ty)) return false;
-    if (!safePlan.path || !safePlan.path.length) return false;
-    const dir = safePlan.path[0];
-    if (dir == null) {
-      if (!this.safeStepExists(sx, sy, dangerGrid)) return false;
+    if ((sameRow || sameCol) && dist <= selfSprite.maxBoom && this.hasLineOfSight(sx, sy, tx, ty)) {
+      shouldAttack = true;
     }
-    const deltas = {
-      [PlayerKeys.Up]: { x: 0, y: -1 },
-      [PlayerKeys.Down]: { x: 0, y: 1 },
-      [PlayerKeys.Left]: { x: -1, y: 0 },
-      [PlayerKeys.Right]: { x: 1, y: 0 },
-    };
-    if (dir != null) {
-      const step = deltas[dir];
-      if (!step) return false;
-      const nx = sx + step.x;
-      const ny = sy + step.y;
-      const destDanger = dangerGrid[ny] ? dangerGrid[ny][nx] : Infinity;
-      if (destDanger <= this.stepDangerBuffer) return false;
+
+    // 2. Proximity Attack (Aggressive Zoning)
+    if (!shouldAttack && dist <= 3) {
+      shouldAttack = true;
     }
+
+    if (!shouldAttack) return false;
+
+    // Safety Check: Can we escape our OWN bomb?
+    if (!this.isSafeFromProposedBomb(sx, sy, selfSprite.maxBoom)) {
+      return false;
+    }
+
     return true;
+  }
+
+  isSafeFromProposedBomb(sx, sy, radius) {
+    // Perform a local BFS to see if we can reach a safe tile
+    const width = map.width;
+    const height = map.height;
+    const visited = new Set();
+    const queue = [];
+    
+    // Starting state: {x, y, steps}
+    queue.push({ x: sx, y: sy, steps: 0 });
+    visited.add(sx + "," + sy);
+
+    const deltas = [
+      { x: 0, y: -1 },
+      { x: 0, y: 1 },
+      { x: -1, y: 0 },
+      { x: 1, y: 0 },
+    ];
+
+    // Limit search depth to avoid performance hit (radius + buffer)
+    const maxDepth = radius + 4;
+
+    while (queue.length > 0) {
+      const node = queue.shift();
+
+      // Check if this node is safe from the bomb at (sx, sy)
+      const onRow = node.y === sy;
+      const onCol = node.x === sx;
+      let isSafe = false;
+
+      if (!onRow && !onCol) {
+        isSafe = true; // Off-axis is safe
+      } else if (onRow && Math.abs(node.x - sx) > radius) {
+        isSafe = true; // Out of range horizontal
+      } else if (onCol && Math.abs(node.y - sy) > radius) {
+        isSafe = true; // Out of range vertical
+      }
+
+      // Also check if the tile is shielded by a wall (simplified: if we walked here, was the path blocked?)
+      // Since we use BFS on walkable tiles, we assume line-of-sight for explosion is blocked by walls.
+      // However, explosion goes through everything except PermanentWall.
+      // Our BFS only walks on Walkable (Free, PowerUp, etc).
+      // So if we are "behind" a wall, we wouldn't be able to walk there directly?
+      // Actually, we can walk around a wall.
+      // But the explosion logic:
+      // burn() stops at PermanentWall.
+      // It also stops at TemporaryWall (and destroys it).
+      // So if we are behind a PermanentWall, we are safe.
+      // But checking "behind wall" is complex.
+      // The simple "off-axis or out-of-range" check is sufficient for 90% of cases.
+      
+      if (isSafe) return true;
+
+      if (node.steps >= maxDepth) continue;
+
+      for (let d of deltas) {
+        const nx = node.x + d.x;
+        const ny = node.y + d.y;
+        
+        if (nx < 0 || ny < 0 || nx >= width || ny >= height) continue;
+        if (!map.isWalkable(nx, ny)) continue;
+        
+        const key = nx + "," + ny;
+        if (visited.has(key)) continue;
+        
+        visited.add(key);
+        queue.push({ x: nx, y: ny, steps: node.steps + 1 });
+      }
+    }
+
+    return false;
   }
 
   hasLineOfSight(x1, y1, x2, y2) {
@@ -2644,24 +2482,26 @@ class SteeringController {
       }
     }
     if (!hasTarget) return false;
-    return this.safeStepExists(sx, sy, dangerGrid);
+    
+    // Use strict safety check with currentSafePlan
+    return this.isSafeFromProposedBomb(sx, sy, selfSprite.maxBoom);
   }
 
-  safeStepExists(x, y, dangerGrid) {
+  getSafeStep(x, y, dangerGrid) {
     const options = [
-      { dx: 0, dy: -1 },
-      { dx: 0, dy: 1 },
-      { dx: -1, dy: 0 },
-      { dx: 1, dy: 0 },
+      { dir: PlayerKeys.Up, dx: 0, dy: -1 },
+      { dir: PlayerKeys.Down, dx: 0, dy: 1 },
+      { dir: PlayerKeys.Left, dx: -1, dy: 0 },
+      { dir: PlayerKeys.Right, dx: 1, dy: 0 },
     ];
     for (let o of options) {
       const nx = x + o.dx;
       const ny = y + o.dy;
       if (!map.isWalkable(nx, ny)) continue;
       const danger = dangerGrid[ny] ? dangerGrid[ny][nx] : Infinity;
-      if (danger > this.stepDangerBuffer) return true;
+      if (danger > this.stepDangerBuffer) return o.dir;
     }
-    return false;
+    return null;
   }
 }
 
