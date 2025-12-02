@@ -1658,9 +1658,9 @@ class SteeringController {
     this.mode = mode;
     this.playerKeys = [];
     this.ai = new BombermanAI({
-      id: 'bot_' + Math.random().toString(36).substr(2, 9),
+      id: "bot_" + Math.random().toString(36).substr(2, 9),
       pos: { x: 1, y: 1 },
-      blastRadius: 2
+      blastRadius: 2,
     });
     this.initialized = false;
   }
@@ -1672,35 +1672,42 @@ class SteeringController {
 
     // Sync AI state with Sprite
     if (!this.initialized) {
-        this.ai.id = selfSprite.id || this.ai.id;
-        this.initialized = true;
+      this.ai.id = selfSprite.id || this.ai.id;
+      this.initialized = true;
     }
-    this.ai.pos = { x: Math.round(selfSprite.x / 16), y: Math.round(selfSprite.y / 16) };
+    this.ai.pos = {
+      x: Math.round(selfSprite.x / 16),
+      y: Math.round(selfSprite.y / 16),
+    };
     this.ai.blastRadius = selfSprite.maxBoom || 2;
 
     // Build Game State for AI
     const grid = [];
     const bombs = [];
-    
+
     for (let y = 0; y < map.height; y++) {
       const row = [];
       for (let x = 0; x < map.width; x++) {
         const cell = map.getCell(x, y);
-        let type = 'empty';
-        if (cell.type === TerrainType.PermanentWall) type = 'wall';
-        else if (cell.type === TerrainType.TemporaryWall) type = 'soft';
+        let type = "empty";
+        if (cell.type === TerrainType.PermanentWall) type = "wall";
+        else if (cell.type === TerrainType.TemporaryWall) type = "soft";
         else if (cell.type === TerrainType.Bomb) {
-          type = 'bomb';
+          type = "bomb";
           bombs.push({
-            x, y,
+            x,
+            y,
             timer: cell.bombTime,
             radius: cell.maxBoom,
-            ownerId: cell.owner ? cell.owner.id : null
+            ownerId: cell.owner ? cell.owner.id : null,
           });
         } else if (cell.type === TerrainType.Fire) {
-            type = 'fire';
-        } else if (cell.type >= TerrainType.PowerUp && cell.type <= TerrainType.PowerUpSkull) {
-          type = 'powerup';
+          type = "fire";
+        } else if (
+          cell.type >= TerrainType.PowerUp &&
+          cell.type <= TerrainType.PowerUpSkull
+        ) {
+          type = "powerup";
         }
         row.push({ type });
       }
@@ -1708,21 +1715,21 @@ class SteeringController {
     }
 
     const players = sprites.map((s, index) => ({
-      id: s.id || ('p_' + index), // Ensure ID exists
+      id: s.id || "p_" + index, // Ensure ID exists
       x: Math.round(s.x / 16),
       y: Math.round(s.y / 16),
-      alive: !s.isDie
+      alive: !s.isDie,
     }));
-    
+
     // Sync AI ID with sprite ID
     const myIdx = sprites.indexOf(selfSprite);
-    this.ai.id = selfSprite.id || ('p_' + myIdx);
+    this.ai.id = selfSprite.id || "p_" + myIdx;
 
     const gameState = {
       grid,
       bombs,
       players,
-      tick: Date.now()
+      tick: Date.now(),
     };
 
     // Get AI decision
@@ -1732,13 +1739,13 @@ class SteeringController {
     if (action.placeBomb) {
       this.playerKeys[PlayerKeys.Bomb] = true;
     }
-    
+
     if (action.move) {
       const targetX = action.move.x;
       const targetY = action.move.y;
       const currentX = this.ai.pos.x;
       const currentY = this.ai.pos.y;
-      
+
       // Simple movement logic: move towards target tile center
       if (targetY < currentY) this.playerKeys[PlayerKeys.Up] = true;
       else if (targetY > currentY) this.playerKeys[PlayerKeys.Down] = true;
@@ -1746,7 +1753,6 @@ class SteeringController {
       else if (targetX > currentX) this.playerKeys[PlayerKeys.Right] = true;
     }
   }
-  
 }
 
 class DemoController {

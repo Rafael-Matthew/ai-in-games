@@ -1,6 +1,6 @@
 class BombermanAI {
   constructor(opts = {}) {
-    this.id = opts.id || 'ai';
+    this.id = opts.id || "ai";
     this.bombRange = opts.blastRadius || 2;
     this.nextMove = null;
     this.shouldBomb = false;
@@ -9,7 +9,7 @@ class BombermanAI {
   update(gameState) {
     const { grid: rawGrid, bombs, players } = gameState;
 
-    const me = players.find(p => p.id === this.id);
+    const me = players.find((p) => p.id === this.id);
     if (!me) return { move: null, placeBomb: false };
 
     this.x = me.x;
@@ -20,28 +20,32 @@ class BombermanAI {
     const gridWrapper = {
       width: rawGrid[0].length,
       height: rawGrid.length,
-      inBounds: (x, y) => x >= 0 && y >= 0 && x < rawGrid[0].length && y < rawGrid.length,
+      inBounds: (x, y) =>
+        x >= 0 && y >= 0 && x < rawGrid[0].length && y < rawGrid.length,
       isSolid: (x, y) => {
-        if (x < 0 || y < 0 || x >= rawGrid[0].length || y >= rawGrid.length) return true;
+        if (x < 0 || y < 0 || x >= rawGrid[0].length || y >= rawGrid.length)
+          return true;
         const t = rawGrid[y][x].type;
-        return t === 'wall' || t === 'soft' || t === 'bomb';
+        return t === "wall" || t === "soft" || t === "bomb";
       },
       isWalkable: (x, y) => {
-        if (x < 0 || y < 0 || x >= rawGrid[0].length || y >= rawGrid.length) return false;
+        if (x < 0 || y < 0 || x >= rawGrid[0].length || y >= rawGrid.length)
+          return false;
         const t = rawGrid[y][x].type;
-        return t !== 'wall' && t !== 'soft' && t !== 'bomb';
+        return t !== "wall" && t !== "soft" && t !== "bomb";
       },
       isDestructible: (x, y) => {
-        if (x < 0 || y < 0 || x >= rawGrid[0].length || y >= rawGrid.length) return false;
-        return rawGrid[y][x].type === 'soft';
-      }
+        if (x < 0 || y < 0 || x >= rawGrid[0].length || y >= rawGrid.length)
+          return false;
+        return rawGrid[y][x].type === "soft";
+      },
     };
 
-    const enemies = players.filter(p => p.id !== this.id && p.alive);
+    const enemies = players.filter((p) => p.id !== this.id && p.alive);
     const powerUps = [];
     for (let y = 0; y < gridWrapper.height; y++) {
       for (let x = 0; x < gridWrapper.width; x++) {
-        if (rawGrid[y][x].type === 'powerup') powerUps.push({ x, y });
+        if (rawGrid[y][x].type === "powerup") powerUps.push({ x, y });
       }
     }
 
@@ -49,22 +53,32 @@ class BombermanAI {
       grid: gridWrapper,
       bombs,
       enemies,
-      powerUps
+      powerUps,
     };
 
     this.botAI(this, game);
 
     return {
       move: this.nextMove,
-      placeBomb: this.shouldBomb
+      placeBomb: this.shouldBomb,
     };
   }
 
-  moveRight() { this.nextMove = { x: this.x + 1, y: this.y }; }
-  moveLeft() { this.nextMove = { x: this.x - 1, y: this.y }; }
-  moveDown() { this.nextMove = { x: this.x, y: this.y + 1 }; }
-  moveUp() { this.nextMove = { x: this.x, y: this.y - 1 }; }
-  placeBomb() { this.shouldBomb = true; }
+  moveRight() {
+    this.nextMove = { x: this.x + 1, y: this.y };
+  }
+  moveLeft() {
+    this.nextMove = { x: this.x - 1, y: this.y };
+  }
+  moveDown() {
+    this.nextMove = { x: this.x, y: this.y + 1 };
+  }
+  moveUp() {
+    this.nextMove = { x: this.x, y: this.y - 1 };
+  }
+  placeBomb() {
+    this.shouldBomb = true;
+  }
 
   botAI(bot, game) {
     const { grid, bombs, enemies, powerUps } = game;
@@ -85,11 +99,15 @@ class BombermanAI {
     // 3. Attack / Wall Breaking
     const enemy = this.nearest(bot, enemies);
     if (enemy) {
-        if (this.handleAttack(bot, enemy, grid, dangerMap, bombs)) return;
-        if (this.handleWallBreaking(bot, enemy, grid, dangerMap, bombs)) return;
+      if (this.handleAttack(bot, enemy, grid, dangerMap, bombs)) return;
+      if (this.handleWallBreaking(bot, enemy, grid, dangerMap, bombs)) return;
     } else {
-        const wall = this.findNearestSoftBlock(bot, grid);
-        if (wall && this.handleWallBreakingTarget(bot, wall, grid, dangerMap, bombs)) return;
+      const wall = this.findNearestSoftBlock(bot, grid);
+      if (
+        wall &&
+        this.handleWallBreakingTarget(bot, wall, grid, dangerMap, bombs)
+      )
+        return;
     }
 
     // 4. Random
@@ -97,59 +115,64 @@ class BombermanAI {
   }
 
   handleAttack(bot, target, grid, dangerMap, bombs) {
-      const dist = Math.abs(bot.x - target.x) + Math.abs(bot.y - target.y);
-      if (dist <= bot.bombRange) {
-          if (this.botHasEscapeRoute(bot, grid, dangerMap, bombs)) {
-              bot.placeBomb();
-              this.executeEscape(bot, grid, dangerMap, bombs);
-              return true;
-          }
+    const dist = Math.abs(bot.x - target.x) + Math.abs(bot.y - target.y);
+    if (dist <= bot.bombRange) {
+      if (this.botHasEscapeRoute(bot, grid, dangerMap, bombs)) {
+        bot.placeBomb();
+        this.executeEscape(bot, grid, dangerMap, bombs);
+        return true;
       }
-      const path = this.aStar({x: bot.x, y: bot.y}, target, grid, dangerMap);
-      if (path && path.length >= 2) {
-          this.moveTo(bot, target, grid, dangerMap);
-          return true;
-      }
-      return false;
+    }
+    const path = this.aStar({ x: bot.x, y: bot.y }, target, grid, dangerMap);
+    if (path && path.length >= 2) {
+      this.moveTo(bot, target, grid, dangerMap);
+      return true;
+    }
+    return false;
   }
 
   handleWallBreaking(bot, target, grid, dangerMap, bombs) {
-      const wall = this.findBlockingWall(bot, target, grid, dangerMap);
-      if (!wall) return false;
-      return this.handleWallBreakingTarget(bot, wall, grid, dangerMap, bombs);
+    const wall = this.findBlockingWall(bot, target, grid, dangerMap);
+    if (!wall) return false;
+    return this.handleWallBreakingTarget(bot, wall, grid, dangerMap, bombs);
   }
 
   handleWallBreakingTarget(bot, wall, grid, dangerMap, bombs) {
-      const attackPos = this.findAdjacentWalkable(wall, grid);
-      if (!attackPos) return false;
+    const attackPos = this.findAdjacentWalkable(wall, grid);
+    if (!attackPos) return false;
 
-      if (bot.x === attackPos.x && bot.y === attackPos.y) {
-          if (this.botHasEscapeRoute(bot, grid, dangerMap, bombs)) {
-              bot.placeBomb();
-              this.executeEscape(bot, grid, dangerMap, bombs);
-              return true;
-          }
-      } else {
-          if (this.moveTo(bot, attackPos, grid, dangerMap)) return true;
+    if (bot.x === attackPos.x && bot.y === attackPos.y) {
+      if (this.botHasEscapeRoute(bot, grid, dangerMap, bombs)) {
+        bot.placeBomb();
+        this.executeEscape(bot, grid, dangerMap, bombs);
+        return true;
       }
-      return false;
+    } else {
+      if (this.moveTo(bot, attackPos, grid, dangerMap)) return true;
+    }
+    return false;
   }
 
   executeEscape(bot, grid, dangerMap, bombs) {
-      const newBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
-      const newDanger = this.computeDangerMap(newBombs, grid, bot.bombRange);
-      const escape = this.findSafeTile(bot, grid, newDanger);
-      if (escape) this.moveTo(bot, escape, grid, newDanger);
+    const newBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
+    const newDanger = this.computeDangerMap(newBombs, grid, bot.bombRange);
+    const escape = this.findSafeTile(bot, grid, newDanger);
+    if (escape) this.moveTo(bot, escape, grid, newDanger);
   }
 
   findBlockingWall(bot, target, grid, dangerMap) {
-      const path = this.aStar({x: bot.x, y: bot.y}, target, grid, dangerMap);
-      if (path) return null; 
-      return this.findNearestSoftBlock(bot, grid);
+    const path = this.aStar({ x: bot.x, y: bot.y }, target, grid, dangerMap);
+    if (path) return null;
+    return this.findNearestSoftBlock(bot, grid);
   }
 
   findNearestSoftBlock(bot, grid) {
-    const dirs = [{x:1,y:0}, {x:-1,y:0}, {x:0,y:1}, {x:0,y:-1}];
+    const dirs = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 },
+    ];
     let queue = [{ x: bot.x, y: bot.y }];
     let visited = new Set([`${bot.x},${bot.y}`]);
 
@@ -174,22 +197,22 @@ class BombermanAI {
       Array(grid.width).fill(0)
     );
 
-    bombs.forEach(bomb => {
+    bombs.forEach((bomb) => {
       let { x, y, timer } = bomb;
-      if (timer === undefined) timer = 3; 
+      if (timer === undefined) timer = 3;
 
       const dirs = [
         { x: 1, y: 0 },
         { x: -1, y: 0 },
         { x: 0, y: 1 },
-        { x: 0, y: -1 }
+        { x: 0, y: -1 },
       ];
 
       if (grid.inBounds(x, y)) {
-          danger[y][x] = timer; 
+        danger[y][x] = timer;
       }
 
-      dirs.forEach(d => {
+      dirs.forEach((d) => {
         for (let dist = 1; dist <= explosionRange; dist++) {
           const nx = x + d.x * dist;
           const ny = y + d.y * dist;
@@ -216,7 +239,7 @@ class BombermanAI {
       g: 0,
       h: Math.abs(start.x - goal.x) + Math.abs(start.y - goal.y),
       f: 0,
-      parent: null
+      parent: null,
     });
 
     while (open.length > 0) {
@@ -240,7 +263,7 @@ class BombermanAI {
         { x: 1, y: 0 },
         { x: -1, y: 0 },
         { x: 0, y: 1 },
-        { x: 0, y: -1 }
+        { x: 0, y: -1 },
       ];
 
       for (let d of dirs) {
@@ -251,20 +274,22 @@ class BombermanAI {
         if (closed.has(nextKey)) continue;
 
         const dangerCost = dangerMap[next.y][next.x] > 0 ? 1000 : 0;
-        const g = current.g + 1 + dangerCost; 
-        
+        const g = current.g + 1 + dangerCost;
+
         const h = Math.abs(next.x - goal.x) + Math.abs(next.y - goal.y);
         const f = g + h;
 
         open.push({
           pos: next,
-          g, h, f,
-          parent: current
+          g,
+          h,
+          f,
+          parent: current,
         });
       }
     }
 
-    return null; 
+    return null;
   }
 
   nearest(bot, items) {
@@ -293,18 +318,23 @@ class BombermanAI {
   }
 
   findAdjacentWalkable(target, grid) {
-      const dirs = [{x:1,y:0}, {x:-1,y:0}, {x:0,y:1}, {x:0,y:-1}];
-      for (let d of dirs) {
-          const nx = target.x + d.x;
-          const ny = target.y + d.y;
-          if (grid.isWalkable(nx, ny)) return {x: nx, y: ny};
-      }
-      return null;
+    const dirs = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 },
+    ];
+    for (let d of dirs) {
+      const nx = target.x + d.x;
+      const ny = target.y + d.y;
+      if (grid.isWalkable(nx, ny)) return { x: nx, y: ny };
+    }
+    return null;
   }
 
   moveTo(bot, target, grid, dangerMap) {
     const path = this.aStar({ x: bot.x, y: bot.y }, target, grid, dangerMap);
-    if (!path || path.length < 2) return false; 
+    if (!path || path.length < 2) return false;
     const next = path[1];
 
     if (next.x > bot.x) bot.moveRight();
@@ -315,24 +345,33 @@ class BombermanAI {
   }
 
   botHasEscapeRoute(bot, grid, dangerMap, bombs) {
-      const simulatedBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
-      const newDanger = this.computeDangerMap(simulatedBombs, grid, bot.bombRange);
-      const safeTile = this.findSafeTile(bot, grid, newDanger);
-      if (!safeTile) return false;
-      const path = this.aStar({x: bot.x, y: bot.y}, safeTile, grid, newDanger);
-      return path !== null;
+    const simulatedBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
+    const newDanger = this.computeDangerMap(
+      simulatedBombs,
+      grid,
+      bot.bombRange
+    );
+    const safeTile = this.findSafeTile(bot, grid, newDanger);
+    if (!safeTile) return false;
+    const path = this.aStar({ x: bot.x, y: bot.y }, safeTile, grid, newDanger);
+    return path !== null;
   }
 
   randomMove(bot, grid) {
-      const dirs = [{x:1,y:0}, {x:-1,y:0}, {x:0,y:1}, {x:0,y:-1}];
-      const valid = dirs.filter(d => grid.isWalkable(bot.x + d.x, bot.y + d.y));
-      if(valid.length) {
-          const d = valid[Math.floor(Math.random() * valid.length)];
-          const target = {x: bot.x + d.x, y: bot.y + d.y};
-          if (target.x > bot.x) bot.moveRight();
-          else if (target.x < bot.x) bot.moveLeft();
-          else if (target.y > bot.y) bot.moveDown();
-          else if (target.y < bot.y) bot.moveUp();
-      }
+    const dirs = [
+      { x: 1, y: 0 },
+      { x: -1, y: 0 },
+      { x: 0, y: 1 },
+      { x: 0, y: -1 },
+    ];
+    const valid = dirs.filter((d) => grid.isWalkable(bot.x + d.x, bot.y + d.y));
+    if (valid.length) {
+      const d = valid[Math.floor(Math.random() * valid.length)];
+      const target = { x: bot.x + d.x, y: bot.y + d.y };
+      if (target.x > bot.x) bot.moveRight();
+      else if (target.x < bot.x) bot.moveLeft();
+      else if (target.y > bot.y) bot.moveDown();
+      else if (target.y < bot.y) bot.moveUp();
+    }
   }
 }
