@@ -475,10 +475,10 @@ class Terrain {
         dy: 0,
       });
     }
-    if (playersCount == 1 && sprites.length > 1 && !this.toGameEnd) {
+    if (playersCount == 1 && sprites.length > 1 && this.toGameEnd === undefined) {
       this.toGameEnd = 60 * 3;
     }
-    if (playersCount == 0 && !this.toGameEnd) {
+    if (playersCount == 0 && this.toGameEnd === undefined) {
       this.toGameEnd = 60 * 3;
     }
 
