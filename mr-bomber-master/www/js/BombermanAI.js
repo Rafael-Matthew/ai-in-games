@@ -2,540 +2,372 @@ class BombermanAI {
   constructor(opts = {}) {
     this.id = opts.id || "ai";
     this.bombRange = opts.blastRadius || 2;
-    this.nextMove = null;
-    this.shouldBomb = false;
-    this.state = "search";
+
+    this.lastDecision = 0;
+    this.lastBombTime = 0;
+    this.BOMB_COOLDOWN = 900;
+    this.DECISION_INTERVAL = 120;
   }
 
   update(gameState) {
     const { grid: rawGrid, bombs, players } = gameState;
+    const now = performance.now();
 
-    const me = players.find((p) => p.id === this.id);
-    if (!me) return { move: null, placeBomb: false };
+    // Find self
+    const bot = players.find((p) => p.id === this.id);
+    if (!bot) return { move: null, placeBomb: false };
 
-    this.x = me.x;
-    this.y = me.y;
-    this.nextMove = null;
-    this.shouldBomb = false;
-
-    const gridWrapper = {
-      width: rawGrid[0].length,
-      height: rawGrid.length,
-      inBounds: (x, y) =>
-        x >= 0 && y >= 0 && x < rawGrid[0].length && y < rawGrid.length,
-      isSolid: (x, y) => {
-        if (x < 0 || y < 0 || x >= rawGrid[0].length || y >= rawGrid.length)
-          return true;
-        const t = rawGrid[y][x].type;
-        return t === "wall" || t === "soft" || t === "bomb";
-      },
-      isWalkable: (x, y) => {
-        if (x < 0 || y < 0 || x >= rawGrid[0].length || y >= rawGrid.length)
-          return false;
-        const t = rawGrid[y][x].type;
-        return t !== "wall" && t !== "soft" && t !== "bomb";
-      },
-      isDestructible: (x, y) => {
-        if (x < 0 || y < 0 || x >= rawGrid[0].length || y >= rawGrid.length)
-          return false;
-        return rawGrid[y][x].type === "soft";
-      },
-    };
-
-    const enemies = players.filter((p) => p.id !== this.id && p.alive);
-    const powerUps = [];
-    for (let y = 0; y < gridWrapper.height; y++) {
-      for (let x = 0; x < gridWrapper.width; x++) {
-        if (rawGrid[y][x].type === "powerup") powerUps.push({ x, y });
-      }
+    // Throttle decision making
+    if (now - this.lastDecision < this.DECISION_INTERVAL) {
+      return { move: null, placeBomb: false };
     }
+    this.lastDecision = now;
 
-    const game = {
-      grid: gridWrapper,
-      bombs,
-      enemies,
-      powerUps,
-    };
-
-    this.botAI(this, game);
-
-    return {
-      move: this.nextMove,
-      placeBomb: this.shouldBomb,
-    };
-  }
-
-  moveRight() {
-    this.nextMove = { x: this.x + 1, y: this.y };
-  }
-  moveLeft() {
-    this.nextMove = { x: this.x - 1, y: this.y };
-  }
-  moveDown() {
-    this.nextMove = { x: this.x, y: this.y + 1 };
-  }
-  moveUp() {
-    this.nextMove = { x: this.x, y: this.y - 1 };
-  }
-  placeBomb() {
-    this.shouldBomb = true;
-  }
-
-  // --- FSM (Finite State Machine) ---
-  // States: search, chase, attack, escape
-  botAI(bot, game) {
-    const { grid, bombs, enemies, powerUps } = game;
-    const dangerMap = this.computeDangerMap(bombs, grid, bot.bombRange);
-
-    // 1. Determine State
-    this.state = this.determineState(bot, game, dangerMap);
-
-    // 2. Execute State
-    switch (this.state) {
-      case "escape":
-        this.moveTowardsSafety(bot, grid, dangerMap);
-        break;
-      case "attack":
-        this.handleAttackState(bot, game, dangerMap, bombs);
-        break;
-      case "chase":
-        this.handleChaseState(bot, game, dangerMap, bombs);
-        break;
-      case "search":
-        this.handleSearchState(bot, game, dangerMap, bombs);
-        break;
-    }
-  }
-
-  determineState(bot, game, dangerMap) {
-    // Priority 1: Safety (Danger Map)
-    if (dangerMap[bot.y][bot.x] > 0) return "escape";
-
-    const { enemies } = game;
-    const enemy = this.nearest(bot, enemies);
-
-    if (enemy) {
-      // Priority 2: Attack Heuristic
-      if (this.shouldAttack(bot, enemy, game.grid)) return "attack";
-      // Priority 3: Chase
-      return "chase";
-    }
-
-    // Priority 4: Search
-    return "search";
-  }
-
-  // --- Attack Heuristic ---
-  shouldAttack(bot, enemy, grid) {
-    const dist = Math.abs(bot.x - enemy.x) + Math.abs(bot.y - enemy.y);
-    // Simple heuristic: Attack if in range and line of sight (optional)
-    return dist <= bot.bombRange;
-  }
-
-  handleAttackState(bot, game, dangerMap, bombs) {
-    const { enemies } = game;
-    const enemy = this.nearest(bot, enemies);
-    if (!enemy) return;
-
-    // Check if we can escape after placing bomb (Safety Heuristic)
-    if (this.isSafeToBomb(bot, game.grid, dangerMap, bombs)) {
-      bot.placeBomb();
-      // Recalculate danger including the new bomb to escape immediately
-      const simulatedBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
-      const newDanger = this.computeDangerMap(
-        simulatedBombs,
-        game.grid,
-        bot.bombRange
-      );
-      this.moveTowardsSafety(bot, game.grid, newDanger);
-    } else {
-      // Cannot attack safely, treat as chase (reposition)
-      this.handleChaseState(bot, game, dangerMap, bombs);
-    }
-  }
-
-  handleChaseState(bot, game, dangerMap, bombs) {
-    const { enemies, grid } = game;
-    const enemy = this.nearest(bot, enemies);
-    if (!enemy) return;
-
-    // Try to move to enemy
-    const path = this.aStar({ x: bot.x, y: bot.y }, enemy, grid, dangerMap);
-    if (path && path.length >= 2) {
-      this.moveTo(bot, enemy, grid, dangerMap);
-    } else {
-      // If path blocked, try to break walls
-      this.attemptWallDestruction(bot, enemy, grid, dangerMap, bombs);
-    }
-  }
-
-  handleSearchState(bot, game, dangerMap, bombs) {
-    const { powerUps, grid } = game;
-
-    // 1. Powerups
-    if (powerUps.length > 0) {
-      const best = this.nearest(bot, powerUps);
-      if (best && this.moveTo(bot, best, grid, dangerMap)) return;
-    }
-
-    // 2. Break Walls (to find items/enemies)
-    const wall = this.findNearestSoftBlock(bot, grid);
-    if (wall) {
-      if (this.attemptWallDestruction(bot, wall, grid, dangerMap, bombs))
-        return;
-    }
-
-    // 3. Random
-    this.randomMove(bot, grid);
-  }
-
-  // --- Helper Methods ---
-
-  attemptWallDestruction(bot, target, grid, dangerMap, bombs) {
-    // Find the specific wall blocking the path or the target itself if it is a wall
-    let wall = target;
-    if (!grid.isDestructible(target.x, target.y)) {
-      wall = this.findBlockingWall(bot, target, grid, dangerMap);
-    }
-
-    if (!wall) return false;
-
-    const dist = Math.abs(bot.x - wall.x) + Math.abs(bot.y - wall.y);
-
-    // If we are next to the wall
-    if (dist === 1) {
-      // Check if placing a bomb here is safe
-      if (this.isSafeToBomb(bot, grid, dangerMap, bombs)) {
-        bot.placeBomb();
-        // Immediately calculate escape move
-        const simulatedBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
-        const newDanger = this.computeDangerMap(
-          simulatedBombs,
-          grid,
-          bot.bombRange
-        );
-        this.moveTowardsSafety(bot, grid, newDanger);
-        return true;
-      }
-    } else {
-      // Move towards the wall to get in range
-      const attackPos = this.findAdjacentWalkable(wall, grid, bot);
-      if (attackPos) {
-        return this.moveTo(bot, attackPos, grid, dangerMap);
-      }
-    }
-    return false;
-  }
-
-  moveTowardsSafety(bot, grid, dangerMap) {
-    const escape = this.findNearestSafeTile(bot, grid, dangerMap);
-    if (escape) {
-      this.moveTo(bot, escape, grid, dangerMap);
-    }
-  }
-
-  isSafeToBomb(bot, grid, dangerMap, bombs) {
-    const simulatedBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
-    const newDanger = this.computeDangerMap(
-      simulatedBombs,
-      grid,
-      bot.bombRange
+    // Convert Grid to Integer Grid for the User's Logic
+    // 1=Wall/Bomb, 2=Soft, 4=Powerup, 0=Empty
+    const grid = rawGrid.map((row) =>
+      row.map((cell) => {
+        if (cell.type === "wall") return 1;
+        if (cell.type === "soft") return 2;
+        if (cell.type === "bomb") return 1; // Treat bomb as wall for movement
+        if (cell.type === "powerup") return 4;
+        return 0;
+      })
     );
-    const escape = this.findNearestSafeTile(bot, grid, newDanger);
-    return escape !== null;
+
+    // 1. Build danger map
+    const danger = this.getDangerMap(grid, bombs);
+
+    // 2. If bot in danger → escape
+    if (danger[bot.y][bot.x] === 1) {
+      const path = this.findSafePath(bot, grid, danger);
+      if (path) {
+        return { move: this.stepTo(path), placeBomb: false };
+      }
+    }
+
+    // 3. Attack enemy if in range + safe
+    const target = this.findClosestEnemy(bot, players);
+    if (target && this.canBombEnemy(bot, target, grid)) {
+      if (now - this.lastBombTime > this.BOMB_COOLDOWN) {
+        this.lastBombTime = now;
+        return { move: null, placeBomb: true };
+      }
+    }
+
+    // 4. If blocked by soft block → bomb it
+    if (this.isSoftBlockFront(bot, grid)) {
+      if (now - this.lastBombTime > this.BOMB_COOLDOWN) {
+        this.lastBombTime = now;
+        return { move: null, placeBomb: true };
+      }
+    }
+
+    // 5. Otherwise → move toward enemy or power up
+    let goal = null;
+
+    // enemy first
+    if (target) {
+      goal = { x: target.x, y: target.y };
+    } else {
+      goal = this.findClosestPowerUp(bot, grid);
+    }
+
+    if (goal) {
+      const path = this.aStar(grid, bot, goal, danger);
+      if (path) {
+        return { move: this.stepTo(path), placeBomb: false };
+      }
+    }
+
+    // 6. If everything fails → random move (never idle)
+    return { move: this.randomMove(grid, bot), placeBomb: false };
   }
 
-  findBlockingWall(bot, target, grid, dangerMap) {
-    const path = this.aStar(
-      { x: bot.x, y: bot.y },
-      target,
-      grid,
-      dangerMap,
-      true
-    );
-    if (path) {
-      for (let node of path) {
-        if (grid.isDestructible(node.x, node.y)) {
-          return node;
+  // ---------------------------------------------------
+  // DANGER MAP
+  // ---------------------------------------------------
+  getDangerMap(grid, bombs) {
+    const H = grid.length;
+    const W = grid[0].length;
+    const danger = Array.from({ length: H }, () => Array(W).fill(0));
+
+    for (const b of bombs) {
+      danger[b.y][b.x] = 1;
+
+      const dirs = [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ];
+
+      // Use radius from game state or default to 2
+      const power = b.radius || 2;
+
+      for (const [dx, dy] of dirs) {
+        let cx = b.x;
+        let cy = b.y;
+
+        for (let i = 0; i < power; i++) {
+          cx += dx;
+          cy += dy;
+
+          if (!this.inBounds(grid, cx, cy)) break;
+          if (grid[cy][cx] === 1) break; // solid
+
+          danger[cy][cx] = 1;
+
+          if (grid[cy][cx] === 2) break; // soft block stops fire
         }
       }
     }
-    return this.findNearestSoftBlock(bot, grid);
-  }
-
-  findNearestSoftBlock(bot, grid) {
-    return this.findNearest(
-      bot,
-      grid,
-      (x, y) => grid.isDestructible(x, y),
-      (x, y) => grid.isWalkable(x, y)
-    );
-  }
-
-  findNearestSafeTile(bot, grid, dangerMap) {
-    return this.findNearest(
-      bot,
-      grid,
-      (x, y) => dangerMap[y][x] === 0,
-      (x, y) => grid.isWalkable(x, y)
-    );
-  }
-
-  // Optimized Dijkstra Search (replaces BFS)
-  findNearest(start, grid, predicate, walkableCheck) {
-    const pq = new MinHeap();
-    pq.push({ x: start.x, y: start.y, g: 0, f: 0 });
-    const visited = new Set([`${start.x},${start.y}`]);
-
-    while (!pq.isEmpty()) {
-      const { x, y, g } = pq.pop();
-
-      if (predicate(x, y)) return { x, y };
-
-      const dirs = [
-        { x: 1, y: 0 },
-        { x: -1, y: 0 },
-        { x: 0, y: 1 },
-        { x: 0, y: -1 },
-      ];
-      for (let d of dirs) {
-        const nx = x + d.x;
-        const ny = y + d.y;
-        const key = `${nx},${ny}`;
-
-        if (!grid.inBounds(nx, ny)) continue;
-        if (visited.has(key)) continue;
-
-        // If it's the target, we can "reach" it even if it's not walkable (e.g. soft block)
-        // But if it's not the target, we must be able to walk on it.
-        const isTarget = predicate(nx, ny);
-        if (!isTarget && !walkableCheck(nx, ny)) continue;
-
-        visited.add(key);
-        pq.push({ x: nx, y: ny, g: g + 1, f: g + 1 });
-      }
-    }
-    return null;
-  }
-
-  // --- Danger Map ---
-  computeDangerMap(bombs, grid, explosionRange) {
-    const danger = Array.from({ length: grid.height }, () =>
-      Array(grid.width).fill(0)
-    );
-
-    bombs.forEach((bomb) => {
-      let { x, y, timer } = bomb;
-      if (timer === undefined) timer = 3;
-
-      const dirs = [
-        { x: 1, y: 0 },
-        { x: -1, y: 0 },
-        { x: 0, y: 1 },
-        { x: 0, y: -1 },
-      ];
-
-      if (grid.inBounds(x, y)) danger[y][x] = timer;
-
-      dirs.forEach((d) => {
-        for (let dist = 1; dist <= explosionRange; dist++) {
-          const nx = x + d.x * dist;
-          const ny = y + d.y * dist;
-
-          if (!grid.inBounds(nx, ny)) break;
-          if (grid.isSolid(nx, ny)) break;
-
-          danger[ny][nx] = timer;
-
-          if (grid.isDestructible(nx, ny)) break;
-        }
-      });
-    });
 
     return danger;
   }
 
-  // --- A* (A-Star Algorithm) ---
-  aStar(start, goal, grid, dangerMap, allowSoftBlocks = false) {
-    const pq = new MinHeap();
-    const closed = new Set();
+  // ---------------------------------------------------
+  // ESCAPE
+  // ---------------------------------------------------
+  findSafePath(bot, grid, danger) {
+    const queue = [[bot.x, bot.y]];
+    const visited = new Set([bot.x + "," + bot.y]);
+    const parent = {};
 
-    const hStart = Math.abs(start.x - goal.x) + Math.abs(start.y - goal.y);
-    pq.push({
-      pos: start,
-      g: 0,
-      h: hStart,
-      f: hStart,
-      parent: null,
-    });
+    while (queue.length > 0) {
+      const [x, y] = queue.shift();
 
-    while (!pq.isEmpty()) {
-      const current = pq.pop();
-      const key = `${current.pos.x},${current.pos.y}`;
-
-      if (current.pos.x === goal.x && current.pos.y === goal.y) {
-        const path = [];
-        let node = current;
-        while (node) {
-          path.unshift(node.pos);
-          node = node.parent;
-        }
-        return path;
+      if (danger[y][x] === 0) {
+        return this.reconstruct(parent, bot, { x, y });
       }
 
-      if (closed.has(key)) continue;
-      closed.add(key);
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const nx = x + dx;
+        const ny = y + dy;
 
-      const dirs = [
-        { x: 1, y: 0 },
-        { x: -1, y: 0 },
-        { x: 0, y: 1 },
-        { x: 0, y: -1 },
-      ];
+        if (!this.inBounds(grid, nx, ny)) continue;
+        if (grid[ny][nx] === 1) continue; // solid
+        if (grid[ny][nx] === 2) continue; // soft block is solid for movement
+        // Note: User code had `if (danger[ny][nx] === 2) continue;` which seemed specific to their logic.
+        // Here we just check if it's walkable.
 
-      for (let d of dirs) {
-        const next = { x: current.pos.x + d.x, y: current.pos.y + d.y };
-        const nextKey = `${next.x},${next.y}`;
-
-        if (closed.has(nextKey)) continue;
-        if (!grid.inBounds(next.x, next.y)) continue;
-
-        let isWalkable = grid.isWalkable(next.x, next.y);
-        let isSoft = grid.isDestructible(next.x, next.y);
-
-        if (!isWalkable) {
-          if (!(allowSoftBlocks && isSoft)) continue;
+        const key = nx + "," + ny;
+        if (!visited.has(key)) {
+          visited.add(key);
+          parent[key] = { x, y };
+          queue.push([nx, ny]);
         }
-
-        const dangerCost = dangerMap[next.y][next.x] > 0 ? 1000 : 0;
-        const softBlockCost = allowSoftBlocks && isSoft ? 5 : 0;
-
-        const g = current.g + 1 + dangerCost + softBlockCost;
-        const h = Math.abs(next.x - goal.x) + Math.abs(next.y - goal.y);
-        const f = g + h;
-
-        pq.push({ pos: next, g, h, f, parent: current });
       }
     }
+
     return null;
   }
 
-  nearest(bot, items) {
-    let min = Infinity;
+  // ---------------------------------------------------
+  // ENEMY
+  // ---------------------------------------------------
+  findClosestEnemy(bot, players) {
     let best = null;
-    for (let t of items) {
-      const d = Math.abs(bot.x - t.x) + Math.abs(bot.y - t.y);
-      if (d < min) {
-        min = d;
-        best = t;
+    let bestDist = Infinity;
+
+    for (const p of players) {
+      if (p.id === bot.id) continue;
+
+      const d = Math.abs(bot.x - p.x) + Math.abs(bot.y - p.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = p;
       }
     }
+
     return best;
   }
 
-  findAdjacentWalkable(target, grid, bot) {
-    if (bot) {
-      const dist = Math.abs(bot.x - target.x) + Math.abs(bot.y - target.y);
-      if (dist === 1 && grid.isWalkable(bot.x, bot.y)) {
-        return { x: bot.x, y: bot.y };
+  canBombEnemy(bot, target, grid) {
+    if (bot.y === target.y) {
+      const minX = Math.min(bot.x, target.x);
+      const maxX = Math.max(bot.x, target.x);
+
+      for (let x = minX; x <= maxX; x++) {
+        if (grid[bot.y][x] === 1) return false;
+        if (grid[bot.y][x] === 2) return false; // Soft block also blocks line of sight
+      }
+      return true;
+    }
+
+    if (bot.x === target.x) {
+      const minY = Math.min(bot.y, target.y);
+      const maxY = Math.max(bot.y, target.y);
+
+      for (let y = minY; y <= maxY; y++) {
+        if (grid[y][bot.x] === 1) return false;
+        if (grid[y][bot.x] === 2) return false;
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  // ---------------------------------------------------
+  // SOFT BLOCK CHECK
+  // ---------------------------------------------------
+  isSoftBlockFront(bot, grid) {
+    const dirs = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
+    for (const [dx, dy] of dirs) {
+      const nx = bot.x + dx;
+      const ny = bot.y + dy;
+      if (!this.inBounds(grid, nx, ny)) continue;
+      if (grid[ny][nx] === 2) return true;
+    }
+    return false;
+  }
+
+  // ---------------------------------------------------
+  // POWER UP
+  // ---------------------------------------------------
+  findClosestPowerUp(bot, grid) {
+    let best = null;
+    let bestDist = Infinity;
+
+    for (let y = 0; y < grid.length; y++) {
+      for (let x = 0; x < grid[0].length; x++) {
+        if (grid[y][x] === 4) {
+          const d = Math.abs(x - bot.x) + Math.abs(y - bot.y);
+          if (d < bestDist) {
+            bestDist = d;
+            best = { x, y };
+          }
+        }
       }
     }
 
-    const dirs = [
-      { x: 1, y: 0 },
-      { x: -1, y: 0 },
-      { x: 0, y: 1 },
-      { x: 0, y: -1 },
-    ];
-    for (let d of dirs) {
-      const nx = target.x + d.x;
-      const ny = target.y + d.y;
-      if (grid.isWalkable(nx, ny)) return { x: nx, y: ny };
+    return best;
+  }
+
+  // ---------------------------------------------------
+  // A* PATHFINDING
+  // ---------------------------------------------------
+  aStar(grid, start, goal, danger) {
+    const open = [];
+    const came = {};
+    const g = {};
+    const f = {};
+    const keyStart = start.x + "," + start.y;
+    const keyGoal = goal.x + "," + goal.y;
+
+    g[keyStart] = 0;
+    f[keyStart] = this.heuristic(start, goal);
+    open.push({ key: keyStart, x: start.x, y: start.y, f: f[keyStart] });
+
+    const visited = new Set();
+
+    while (open.length > 0) {
+      open.sort((a, b) => a.f - b.f);
+      const cur = open.shift();
+      visited.add(cur.key);
+
+      if (cur.key === keyGoal) {
+        return this.reconstruct(came, start, goal);
+      }
+
+      for (const [dx, dy] of [
+        [1, 0],
+        [-1, 0],
+        [0, 1],
+        [0, -1],
+      ]) {
+        const nx = cur.x + dx;
+        const ny = cur.y + dy;
+
+        if (!this.inBounds(grid, nx, ny)) continue;
+        if (grid[ny][nx] === 1) continue; // solid
+        if (grid[ny][nx] === 2) continue; // soft
+        if (danger[ny][nx] === 1) continue; // danger
+
+        const nk = nx + "," + ny;
+        if (visited.has(nk)) continue;
+
+        const tentative = g[cur.key] + 1;
+
+        if (g[nk] === undefined || tentative < g[nk]) {
+          came[nk] = { x: cur.x, y: cur.y };
+          g[nk] = tentative;
+          f[nk] = tentative + this.heuristic({ x: nx, y: ny }, goal);
+
+          open.push({ key: nk, x: nx, y: ny, f: f[nk] });
+        }
+      }
     }
+
     return null;
   }
 
-  moveTo(bot, target, grid, dangerMap) {
-    const path = this.aStar({ x: bot.x, y: bot.y }, target, grid, dangerMap);
-    if (!path || path.length < 2) return false;
-    const next = path[1];
-
-    if (next.x > bot.x) bot.moveRight();
-    else if (next.x < bot.x) bot.moveLeft();
-    else if (next.y > bot.y) bot.moveDown();
-    else if (next.y < bot.y) bot.moveUp();
-    return true;
+  heuristic(a, b) {
+    return Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
   }
 
-  randomMove(bot, grid) {
+  // ---------------------------------------------------
+  // SMALL UTILITIES
+  // ---------------------------------------------------
+  inBounds(grid, x, y) {
+    return x >= 0 && y >= 0 && y < grid.length && x < grid[0].length;
+  }
+
+  reconstruct(came, start, goal) {
+    const path = [];
+    let cx = goal.x;
+    let cy = goal.y;
+
+    while (cx !== start.x || cy !== start.y) {
+      path.push({ x: cx, y: cy });
+      const key = cx + "," + cy;
+      const p = came[key];
+      if (!p) return null;
+      cx = p.x;
+      cy = p.y;
+    }
+
+    path.reverse();
+    return path;
+  }
+
+  stepTo(path) {
+    if (!path || path.length === 0) return null;
+    // Return the coordinate of the next step
+    return path[0];
+  }
+
+  randomMove(grid, bot) {
     const dirs = [
-      { x: 1, y: 0 },
-      { x: -1, y: 0 },
-      { x: 0, y: 1 },
       { x: 0, y: -1 },
+      { x: 0, y: 1 },
+      { x: -1, y: 0 },
+      { x: 1, y: 0 },
     ];
-    const valid = dirs.filter((d) => grid.isWalkable(bot.x + d.x, bot.y + d.y));
-    if (valid.length) {
-      const d = valid[Math.floor(Math.random() * valid.length)];
-      const target = { x: bot.x + d.x, y: bot.y + d.y };
-      if (target.x > bot.x) bot.moveRight();
-      else if (target.x < bot.x) bot.moveLeft();
-      else if (target.y > bot.y) bot.moveDown();
-      else if (target.y < bot.y) bot.moveUp();
-    }
-  }
-}
+    const valid = dirs.filter((d) => {
+      const nx = bot.x + d.x;
+      const ny = bot.y + d.y;
+      // Check bounds and if walkable (not wall/soft/bomb)
+      return (
+        this.inBounds(grid, nx, ny) &&
+        grid[ny][nx] !== 1 &&
+        grid[ny][nx] !== 2
+      );
+    });
 
-class MinHeap {
-  constructor() {
-    this.heap = [];
-  }
-  push(val) {
-    this.heap.push(val);
-    this.bubbleUp(this.heap.length - 1);
-  }
-  pop() {
-    if (this.heap.length === 0) return null;
-    const top = this.heap[0];
-    const bottom = this.heap.pop();
-    if (this.heap.length > 0) {
-      this.heap[0] = bottom;
-      this.bubbleDown(0);
-    }
-    return top;
-  }
-  isEmpty() {
-    return this.heap.length === 0;
-  }
-  bubbleUp(index) {
-    while (index > 0) {
-      const parent = Math.floor((index - 1) / 2);
-      if (this.heap[parent].f <= this.heap[index].f) break;
-      [this.heap[parent], this.heap[index]] = [
-        this.heap[index],
-        this.heap[parent],
-      ];
-      index = parent;
-    }
-  }
-  bubbleDown(index) {
-    while (true) {
-      let left = 2 * index + 1;
-      let right = 2 * index + 2;
-      let smallest = index;
-      if (left < this.heap.length && this.heap[left].f < this.heap[smallest].f)
-        smallest = left;
-      if (
-        right < this.heap.length &&
-        this.heap[right].f < this.heap[smallest].f
-      )
-        smallest = right;
-      if (smallest === index) break;
-      [this.heap[index], this.heap[smallest]] = [
-        this.heap[smallest],
-        this.heap[index],
-      ];
-      index = smallest;
-    }
+    if (valid.length === 0) return null;
+    const d = valid[Math.floor(Math.random() * valid.length)];
+    return { x: bot.x + d.x, y: bot.y + d.y };
   }
 }
