@@ -93,7 +93,7 @@ class BombermanAI {
     // 2. Execute State
     switch (this.state) {
       case "escape":
-        this.executeEscape(bot, grid, dangerMap, bombs);
+        this.moveTowardsSafety(bot, grid, dangerMap);
         break;
       case "attack":
         this.handleAttackState(bot, game, dangerMap, bombs);
@@ -108,22 +108,28 @@ class BombermanAI {
   }
 
   determineState(bot, game, dangerMap) {
-    // Priority 1: Safety
+    // Priority 1: Safety (Danger Map)
     if (dangerMap[bot.y][bot.x] > 0) return "escape";
 
     const { enemies } = game;
     const enemy = this.nearest(bot, enemies);
 
     if (enemy) {
-      const dist = Math.abs(bot.x - enemy.x) + Math.abs(bot.y - enemy.y);
-      // Priority 2: Attack if in range
-      if (dist <= bot.bombRange) return "attack";
-      // Priority 3: Chase if enemy exists but far
+      // Priority 2: Attack Heuristic
+      if (this.shouldAttack(bot, enemy, game.grid)) return "attack";
+      // Priority 3: Chase
       return "chase";
     }
 
-    // Priority 4: Search if no enemy
+    // Priority 4: Search
     return "search";
+  }
+
+  // --- Attack Heuristic ---
+  shouldAttack(bot, enemy, grid) {
+    const dist = Math.abs(bot.x - enemy.x) + Math.abs(bot.y - enemy.y);
+    // Simple heuristic: Attack if in range and line of sight (optional)
+    return dist <= bot.bombRange;
   }
 
   handleAttackState(bot, game, dangerMap, bombs) {
@@ -131,10 +137,13 @@ class BombermanAI {
     const enemy = this.nearest(bot, enemies);
     if (!enemy) return;
 
-    // Check if we can escape after placing bomb
-    if (this.botHasEscapeRoute(bot, game.grid, dangerMap, bombs)) {
+    // Check if we can escape after placing bomb (Safety Heuristic)
+    if (this.isSafeToBomb(bot, game.grid, dangerMap, bombs)) {
       bot.placeBomb();
-      this.executeEscape(bot, game.grid, dangerMap, bombs);
+      // Recalculate danger including the new bomb to escape immediately
+      const simulatedBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
+      const newDanger = this.computeDangerMap(simulatedBombs, game.grid, bot.bombRange);
+      this.moveTowardsSafety(bot, game.grid, newDanger);
     } else {
       // Cannot attack safely, treat as chase (reposition)
       this.handleChaseState(bot, game, dangerMap, bombs);
@@ -152,7 +161,7 @@ class BombermanAI {
       this.moveTo(bot, enemy, grid, dangerMap);
     } else {
       // If path blocked, try to break walls
-      this.handleWallBreaking(bot, enemy, grid, dangerMap, bombs);
+      this.attemptWallDestruction(bot, enemy, grid, dangerMap, bombs);
     }
   }
 
@@ -167,11 +176,9 @@ class BombermanAI {
 
     // 2. Break Walls (to find items/enemies)
     const wall = this.findNearestSoftBlock(bot, grid);
-    if (
-      wall &&
-      this.handleWallBreakingTarget(bot, wall, grid, dangerMap, bombs)
-    )
-      return;
+    if (wall) {
+        if (this.attemptWallDestruction(bot, wall, grid, dangerMap, bombs)) return;
+    }
 
     // 3. Random
     this.randomMove(bot, grid);
@@ -179,43 +186,46 @@ class BombermanAI {
 
   // --- Helper Methods ---
 
-  handleWallBreaking(bot, target, grid, dangerMap, bombs) {
-    const wall = this.findBlockingWall(bot, target, grid, dangerMap);
+  attemptWallDestruction(bot, target, grid, dangerMap, bombs) {
+    // Find the specific wall blocking the path or the target itself if it is a wall
+    let wall = target;
+    if (!grid.isDestructible(target.x, target.y)) {
+        wall = this.findBlockingWall(bot, target, grid, dangerMap);
+    }
+    
     if (!wall) return false;
-    return this.handleWallBreakingTarget(bot, wall, grid, dangerMap, bombs);
-  }
 
-  handleWallBreakingTarget(bot, wall, grid, dangerMap, bombs) {
     const dist = Math.abs(bot.x - wall.x) + Math.abs(bot.y - wall.y);
+    
+    // If we are next to the wall
     if (dist === 1) {
-      if (this.botHasEscapeRoute(bot, grid, dangerMap, bombs)) {
+      // Check if placing a bomb here is safe
+      if (this.isSafeToBomb(bot, grid, dangerMap, bombs)) {
         bot.placeBomb();
-        this.executeEscape(bot, grid, dangerMap, bombs);
+        // Immediately calculate escape move
+        const simulatedBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
+        const newDanger = this.computeDangerMap(simulatedBombs, grid, bot.bombRange);
+        this.moveTowardsSafety(bot, grid, newDanger);
         return true;
       }
-    }
-
-    const attackPos = this.findAdjacentWalkable(wall, grid, bot);
-    if (!attackPos) return false;
-
-    if (bot.x === attackPos.x && bot.y === attackPos.y) {
-      return false;
     } else {
-      if (this.moveTo(bot, attackPos, grid, dangerMap)) return true;
+      // Move towards the wall to get in range
+      const attackPos = this.findAdjacentWalkable(wall, grid, bot);
+      if (attackPos) {
+        return this.moveTo(bot, attackPos, grid, dangerMap);
+      }
     }
     return false;
   }
 
-  executeEscape(bot, grid, dangerMap, bombs) {
-    const newBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
-    const newDanger = this.computeDangerMap(newBombs, grid, bot.bombRange);
-    const escape = this.findNearestSafeTile(bot, grid, newDanger);
+  moveTowardsSafety(bot, grid, dangerMap) {
+    const escape = this.findNearestSafeTile(bot, grid, dangerMap);
     if (escape) {
-      this.moveTo(bot, escape, grid, newDanger);
+      this.moveTo(bot, escape, grid, dangerMap);
     }
   }
 
-  botHasEscapeRoute(bot, grid, dangerMap, bombs) {
+  isSafeToBomb(bot, grid, dangerMap, bombs) {
     const simulatedBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
     const newDanger = this.computeDangerMap(
       simulatedBombs,
