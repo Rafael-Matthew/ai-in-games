@@ -142,7 +142,11 @@ class BombermanAI {
       bot.placeBomb();
       // Recalculate danger including the new bomb to escape immediately
       const simulatedBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
-      const newDanger = this.computeDangerMap(simulatedBombs, game.grid, bot.bombRange);
+      const newDanger = this.computeDangerMap(
+        simulatedBombs,
+        game.grid,
+        bot.bombRange
+      );
       this.moveTowardsSafety(bot, game.grid, newDanger);
     } else {
       // Cannot attack safely, treat as chase (reposition)
@@ -177,7 +181,8 @@ class BombermanAI {
     // 2. Break Walls (to find items/enemies)
     const wall = this.findNearestSoftBlock(bot, grid);
     if (wall) {
-        if (this.attemptWallDestruction(bot, wall, grid, dangerMap, bombs)) return;
+      if (this.attemptWallDestruction(bot, wall, grid, dangerMap, bombs))
+        return;
     }
 
     // 3. Random
@@ -190,13 +195,13 @@ class BombermanAI {
     // Find the specific wall blocking the path or the target itself if it is a wall
     let wall = target;
     if (!grid.isDestructible(target.x, target.y)) {
-        wall = this.findBlockingWall(bot, target, grid, dangerMap);
+      wall = this.findBlockingWall(bot, target, grid, dangerMap);
     }
-    
+
     if (!wall) return false;
 
     const dist = Math.abs(bot.x - wall.x) + Math.abs(bot.y - wall.y);
-    
+
     // If we are next to the wall
     if (dist === 1) {
       // Check if placing a bomb here is safe
@@ -204,7 +209,11 @@ class BombermanAI {
         bot.placeBomb();
         // Immediately calculate escape move
         const simulatedBombs = [...bombs, { x: bot.x, y: bot.y, timer: 3 }];
-        const newDanger = this.computeDangerMap(simulatedBombs, grid, bot.bombRange);
+        const newDanger = this.computeDangerMap(
+          simulatedBombs,
+          grid,
+          bot.bombRange
+        );
         this.moveTowardsSafety(bot, grid, newDanger);
         return true;
       }
