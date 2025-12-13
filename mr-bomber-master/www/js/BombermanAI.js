@@ -76,15 +76,15 @@ class BombermanAI {
         // Double check: are we "barely" safe? If so, try to move further.
         const neighborsDanger = this.countDangerNeighbors(danger, bot.x, bot.y);
         if (neighborsDanger > 0) {
-           // We are adjacent to danger. Try to find a better spot.
-           const betterPath = this.findSafePath(bot, grid, danger, {
-             minDistance: 1, // Just move away
-             requireSafeNeighbor: true
-           });
-           if (betterPath && betterPath.length > 0) {
-             this._escapePath = betterPath;
-             return { move: this.stepTo(this._escapePath), placeBomb: false };
-           }
+          // We are adjacent to danger. Try to find a better spot.
+          const betterPath = this.findSafePath(bot, grid, danger, {
+            minDistance: 1, // Just move away
+            requireSafeNeighbor: true,
+          });
+          if (betterPath && betterPath.length > 0) {
+            this._escapePath = betterPath;
+            return { move: this.stepTo(this._escapePath), placeBomb: false };
+          }
         }
         return { move: null, placeBomb: false };
       }
@@ -216,7 +216,7 @@ class BombermanAI {
           if (grid[cy][cx] === 1) break; // solid wall stops fire
           // Note: We do NOT break on bombs (3). If a bomb is hit, it explodes,
           // effectively continuing the danger zone.
-          
+
           danger[cy][cx] = 1;
 
           if (grid[cy][cx] === 2) break; // soft block stops fire
@@ -277,7 +277,11 @@ class BombermanAI {
           const preferDistance = pathLen >= minDistance ? 0 : 20;
           // Heavily penalize being next to danger (50), and prefer open spaces (safeNeighborCount).
           // (4 - safeNeighborCount) * 5 means: 0 penalty for 4 safe neighbors, 15 penalty for 1 safe neighbor.
-          const score = curCost + neighborDanger * 50 + (4 - safeNeighborCount) * 5 + preferDistance;
+          const score =
+            curCost +
+            neighborDanger * 50 +
+            (4 - safeNeighborCount) * 5 +
+            preferDistance;
           if (score < bestCandidate.score) {
             bestCandidate.key = curKey;
             bestCandidate.score = score;
@@ -609,14 +613,14 @@ class BombermanAI {
       { x: -1, y: 0 },
       { x: 1, y: 0 },
     ];
-    
+
     // First try to find a safe move
     let valid = dirs.filter((d) => {
       const nx = bot.x + d.x;
       const ny = bot.y + d.y;
       return (
-        this.inBounds(grid, nx, ny) && 
-        grid[ny][nx] !== 1 && 
+        this.inBounds(grid, nx, ny) &&
+        grid[ny][nx] !== 1 &&
         grid[ny][nx] !== 2 &&
         grid[ny][nx] !== 3 && // bomb
         grid[ny][nx] !== 5 && // fire
@@ -626,12 +630,12 @@ class BombermanAI {
 
     // If no safe moves, fall back to any valid move (desperation)
     if (valid.length === 0) {
-       valid = dirs.filter((d) => {
+      valid = dirs.filter((d) => {
         const nx = bot.x + d.x;
         const ny = bot.y + d.y;
         return (
-          this.inBounds(grid, nx, ny) && 
-          grid[ny][nx] !== 1 && 
+          this.inBounds(grid, nx, ny) &&
+          grid[ny][nx] !== 1 &&
           grid[ny][nx] !== 2 &&
           grid[ny][nx] !== 3 && // bomb
           grid[ny][nx] !== 5 // fire
