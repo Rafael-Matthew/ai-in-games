@@ -1667,6 +1667,11 @@ class SteeringController {
       blastRadius: 2,
     });
     this.initialized = false;
+
+    // Movement smoothing: lock onto a single next-tile target and keep
+    // pressing a direction until we reach it.
+    this._moveLockTarget = null; // {x,y}
+    this._moveLockDir = null; // PlayerKeys.Up/Down/Left/Right
   }
 
   update() {
@@ -1680,9 +1685,11 @@ class SteeringController {
       this.initialized = true;
     }
     this.ai.pos = {
-      x: Math.round(selfSprite.x / 16),
-      y: Math.round(selfSprite.y / 16),
+      x: Int.divRound(selfSprite.x, 16),
+      y: Int.divRound(selfSprite.y, 16),
     };
+    // Keep both for compatibility, but BombermanAI uses bombRange.
+    this.ai.bombRange = selfSprite.maxBoom || 2;
     this.ai.blastRadius = selfSprite.maxBoom || 2;
 
     // Build Game State for AI
@@ -1720,8 +1727,8 @@ class SteeringController {
 
     const players = sprites.map((s, index) => ({
       id: s.id || "p_" + index, // Ensure ID exists
-      x: Math.round(s.x / 16),
-      y: Math.round(s.y / 16),
+      x: Int.divRound(s.x, 16),
+      y: Int.divRound(s.y, 16),
       alive: !s.isDie,
     }));
 
@@ -1744,17 +1751,72 @@ class SteeringController {
       this.playerKeys[PlayerKeys.Bomb] = true;
     }
 
+    // Smooth movement: keep a one-tile target lock so we don't stop/retarget
+    // mid-tile (important when escaping bombs).
+    const currentTileX = Int.divRound(selfSprite.x, 16);
+    const currentTileY = Int.divRound(selfSprite.y, 16);
+    const isAligned = selfSprite.x % 16 === 0 && selfSprite.y % 16 === 0;
+
+    if (
+      this._moveLockTarget &&
+      this._moveLockTarget.x === currentTileX &&
+      this._moveLockTarget.y === currentTileY
+    ) {
+      this._moveLockTarget = null;
+      this._moveLockDir = null;
+    }
+
     if (action.move) {
+      if (!this._moveLockTarget || isAligned) {
+        this._moveLockTarget = { x: action.move.x, y: action.move.y };
+      }
+    }
+
+    const target = this._moveLockTarget;
+    if (target) {
+      const dx = target.x - currentTileX;
+      const dy = target.y - currentTileY;
+
+      let desiredDir = null;
+      if (dy < 0) desiredDir = PlayerKeys.Up;
+      else if (dy > 0) desiredDir = PlayerKeys.Down;
+      else if (dx < 0) desiredDir = PlayerKeys.Left;
+      else if (dx > 0) desiredDir = PlayerKeys.Right;
+
+      if (isAligned && desiredDir != null) {
+        this._moveLockDir = desiredDir;
+      }
+
+      // Fallback: if we're slightly off-grid and never latched a direction,
+      // pick one immediately so the bot doesn't freeze.
+      if (this._moveLockDir == null && desiredDir != null) {
+        this._moveLockDir = desiredDir;
+      }
+
+      if (this._moveLockDir === PlayerKeys.Up) this.playerKeys[PlayerKeys.Up] = true;
+      else if (this._moveLockDir === PlayerKeys.Down)
+        this.playerKeys[PlayerKeys.Down] = true;
+      else if (this._moveLockDir === PlayerKeys.Left)
+        this.playerKeys[PlayerKeys.Left] = true;
+      else if (this._moveLockDir === PlayerKeys.Right)
+        this.playerKeys[PlayerKeys.Right] = true;
+    }
+
+    // Absolute fallback: if AI gave a move but lock logic didn't set any key,
+    // steer directly toward the requested tile.
+    if (
+      action.move &&
+      !this.playerKeys[PlayerKeys.Up] &&
+      !this.playerKeys[PlayerKeys.Down] &&
+      !this.playerKeys[PlayerKeys.Left] &&
+      !this.playerKeys[PlayerKeys.Right]
+    ) {
       const targetX = action.move.x;
       const targetY = action.move.y;
-      const currentX = this.ai.pos.x;
-      const currentY = this.ai.pos.y;
-
-      // Simple movement logic: move towards target tile center
-      if (targetY < currentY) this.playerKeys[PlayerKeys.Up] = true;
-      else if (targetY > currentY) this.playerKeys[PlayerKeys.Down] = true;
-      else if (targetX < currentX) this.playerKeys[PlayerKeys.Left] = true;
-      else if (targetX > currentX) this.playerKeys[PlayerKeys.Right] = true;
+      if (targetY < currentTileY) this.playerKeys[PlayerKeys.Up] = true;
+      else if (targetY > currentTileY) this.playerKeys[PlayerKeys.Down] = true;
+      else if (targetX < currentTileX) this.playerKeys[PlayerKeys.Left] = true;
+      else if (targetX > currentTileX) this.playerKeys[PlayerKeys.Right] = true;
     }
   }
 }
