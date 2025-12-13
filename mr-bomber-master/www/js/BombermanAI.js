@@ -200,7 +200,9 @@ class BombermanAI {
   // ESCAPE
   // ---------------------------------------------------
   findSafePath(bot, grid, danger, opts = {}) {
-    const minDistance = Number.isFinite(opts.minDistance) ? opts.minDistance : 2;
+    const minDistance = Number.isFinite(opts.minDistance)
+      ? opts.minDistance
+      : 2;
     const requireSafeNeighbor =
       typeof opts.requireSafeNeighbor === "boolean"
         ? opts.requireSafeNeighbor
@@ -229,9 +231,18 @@ class BombermanAI {
       // Candidate must be safe; by default avoid "marginal" safe tiles.
       if (danger[cur.y][cur.x] === 0) {
         const pathLen = this.pathLength(parent, bot, { x: cur.x, y: cur.y });
-        const safeNeighborCount = this.countSafeNeighbors(grid, danger, cur.x, cur.y);
+        const safeNeighborCount = this.countSafeNeighbors(
+          grid,
+          danger,
+          cur.x,
+          cur.y
+        );
         if (!requireSafeNeighbor || safeNeighborCount >= 1) {
-          const neighborDanger = this.countDangerNeighbors(danger, cur.x, cur.y);
+          const neighborDanger = this.countDangerNeighbors(
+            danger,
+            cur.x,
+            cur.y
+          );
           const preferDistance = pathLen >= minDistance ? 0 : 3;
           const score = curCost + neighborDanger * 5 + preferDistance;
           if (score < bestCandidate.score) {
@@ -268,7 +279,10 @@ class BombermanAI {
     }
 
     if (!bestCandidate.key) return null;
-    return this.reconstruct(parent, bot, { x: bestCandidate.x, y: bestCandidate.y });
+    return this.reconstruct(parent, bot, {
+      x: bestCandidate.x,
+      y: bestCandidate.y,
+    });
   }
 
   pathLength(came, start, goal) {

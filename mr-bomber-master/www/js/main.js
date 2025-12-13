@@ -1793,7 +1793,8 @@ class SteeringController {
         this._moveLockDir = desiredDir;
       }
 
-      if (this._moveLockDir === PlayerKeys.Up) this.playerKeys[PlayerKeys.Up] = true;
+      if (this._moveLockDir === PlayerKeys.Up)
+        this.playerKeys[PlayerKeys.Up] = true;
       else if (this._moveLockDir === PlayerKeys.Down)
         this.playerKeys[PlayerKeys.Down] = true;
       else if (this._moveLockDir === PlayerKeys.Left)
