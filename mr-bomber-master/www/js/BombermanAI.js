@@ -33,13 +33,14 @@ class BombermanAI {
     this.lastDecision = now;
 
     // Convert Grid to Integer Grid for the User's Logic
-    // 1=Wall/Bomb, 2=Soft, 4=Powerup, 0=Empty
+    // 1=Wall, 2=Soft, 3=Bomb, 4=Powerup, 5=Fire, 0=Empty
     const grid = rawGrid.map((row) =>
       row.map((cell) => {
         if (cell.type === "wall") return 1;
         if (cell.type === "soft") return 2;
-        if (cell.type === "bomb") return 1; // Treat bomb as wall for movement
+        if (cell.type === "bomb") return 3; // Treat bomb as distinct obstacle
         if (cell.type === "powerup") return 4;
+        if (cell.type === "fire") return 5;
         return 0;
       })
     );
@@ -68,6 +69,25 @@ class BombermanAI {
       if (this._escapePath && this._escapePath.length > 0) {
         return { move: this.stepTo(this._escapePath), placeBomb: false };
       }
+
+      // If we are waiting for a bomb (escape timer active) and are currently safe,
+      // stop here. Do not proceed to attack or farm soft blocks until the bomb explodes.
+      if (now < this._escapeUntil && danger[bot.y][bot.x] === 0) {
+        // Double check: are we "barely" safe? If so, try to move further.
+        const neighborsDanger = this.countDangerNeighbors(danger, bot.x, bot.y);
+        if (neighborsDanger > 0) {
+           // We are adjacent to danger. Try to find a better spot.
+           const betterPath = this.findSafePath(bot, grid, danger, {
+             minDistance: 1, // Just move away
+             requireSafeNeighbor: true
+           });
+           if (betterPath && betterPath.length > 0) {
+             this._escapePath = betterPath;
+             return { move: this.stepTo(this._escapePath), placeBomb: false };
+           }
+        }
+        return { move: null, placeBomb: false };
+      }
     } else {
       // Not escaping anymore.
       this._escapePath = null;
@@ -78,18 +98,20 @@ class BombermanAI {
     if (target && this.canBombEnemy(bot, target, grid)) {
       if (now - this.lastBombTime > this.BOMB_COOLDOWN) {
         // Only bomb if we can escape from the blast of the bomb we're placing.
+        // PARANOID MODE: Assume the bomb is bigger than we think to ensure safety.
+        const safeRadius = (this.bombRange || 2) + 2;
         const simBombs = bombs.concat([
           {
             x: bot.x,
             y: bot.y,
-            radius: this.bombRange || 2,
+            radius: safeRadius,
             timer: 999,
             ownerId: this.id,
           },
         ]);
         const simDanger = this.getDangerMap(grid, simBombs);
         const escapePath = this.findSafePath(bot, grid, simDanger, {
-          minDistance: 2,
+          minDistance: safeRadius + 1,
           requireSafeNeighbor: true,
         });
         if (escapePath && escapePath.length > 0) {
@@ -98,7 +120,8 @@ class BombermanAI {
           // IMPORTANT: do NOT move on the same tick as placing a bomb.
           // In this engine, bombs are placed after movement, so moving+placing
           // would place the bomb on the destination tile.
-          this._escapeUntil = now + 900;
+          // Wait 4500ms (3.5s fuse + 1s safety)
+          this._escapeUntil = now + 4500;
           this._escapePath = escapePath;
           return { move: null, placeBomb: true };
         }
@@ -108,11 +131,13 @@ class BombermanAI {
     // 4. If blocked by soft block → bomb it
     if (this.isSoftBlockFront(bot, grid)) {
       if (now - this.lastBombTime > this.BOMB_COOLDOWN) {
+        // PARANOID MODE: Assume the bomb is bigger than we think to ensure safety.
+        const safeRadius = (this.bombRange || 2) + 2;
         const simBombs = bombs.concat([
           {
             x: bot.x,
             y: bot.y,
-            radius: this.bombRange || 2,
+            radius: safeRadius,
             timer: 999,
             ownerId: this.id,
           },
@@ -121,26 +146,30 @@ class BombermanAI {
         // Soft-block clearing happens in tighter spaces; relax escape constraints a bit
         // so the bot will actually bomb (but still only if an escape exists).
         const escapePath = this.findSafePath(bot, grid, simDanger, {
-          minDistance: 1,
+          minDistance: safeRadius,
           requireSafeNeighbor: false,
         });
         if (escapePath && escapePath.length > 0) {
           this.lastBombTime = now;
-          this._escapeUntil = now + 900;
+          this._escapeUntil = now + 4500;
           this._escapePath = escapePath;
           return { move: null, placeBomb: true };
         }
       }
     }
 
-    // 5. Otherwise → move toward enemy or power up
+    // 5. Otherwise → move toward enemy, power up, or a soft block to clear
     let goal = null;
 
     // enemy first
     if (target) {
       goal = { x: target.x, y: target.y };
     } else {
+      // Prefer powerups; if none, hunt soft blocks so bots can open space.
       goal = this.findClosestPowerUp(bot, grid);
+      if (!goal) {
+        goal = this.findSoftBlockApproachTile(bot, grid, danger);
+      }
     }
 
     if (goal) {
@@ -151,7 +180,7 @@ class BombermanAI {
     }
 
     // 6. If everything fails → random move (never idle)
-    return { move: this.randomMove(grid, bot), placeBomb: false };
+    return { move: this.randomMove(grid, bot, danger), placeBomb: false };
   }
 
   // ---------------------------------------------------
@@ -184,8 +213,10 @@ class BombermanAI {
           cy += dy;
 
           if (!this.inBounds(grid, cx, cy)) break;
-          if (grid[cy][cx] === 1) break; // solid
-
+          if (grid[cy][cx] === 1) break; // solid wall stops fire
+          // Note: We do NOT break on bombs (3). If a bomb is hit, it explodes,
+          // effectively continuing the danger zone.
+          
           danger[cy][cx] = 1;
 
           if (grid[cy][cx] === 2) break; // soft block stops fire
@@ -243,8 +274,10 @@ class BombermanAI {
             cur.x,
             cur.y
           );
-          const preferDistance = pathLen >= minDistance ? 0 : 3;
-          const score = curCost + neighborDanger * 5 + preferDistance;
+          const preferDistance = pathLen >= minDistance ? 0 : 20;
+          // Heavily penalize being next to danger (50), and prefer open spaces (safeNeighborCount).
+          // (4 - safeNeighborCount) * 5 means: 0 penalty for 4 safe neighbors, 15 penalty for 1 safe neighbor.
+          const score = curCost + neighborDanger * 50 + (4 - safeNeighborCount) * 5 + preferDistance;
           if (score < bestCandidate.score) {
             bestCandidate.key = curKey;
             bestCandidate.score = score;
@@ -265,6 +298,8 @@ class BombermanAI {
         if (!this.inBounds(grid, nx, ny)) continue;
         if (grid[ny][nx] === 1) continue;
         if (grid[ny][nx] === 2) continue;
+        if (grid[ny][nx] === 3) continue; // bomb
+        if (grid[ny][nx] === 5) continue; // fire
 
         const nk = nx + "," + ny;
         // Entering a danger tile is expensive.
@@ -331,6 +366,8 @@ class BombermanAI {
       if (!this.inBounds(grid, nx, ny)) continue;
       if (grid[ny][nx] === 1) continue;
       if (grid[ny][nx] === 2) continue;
+      if (grid[ny][nx] === 3) continue; // bomb
+      if (grid[ny][nx] === 5) continue; // fire
       if (danger[ny][nx] === 0) c++;
     }
     return c;
@@ -364,6 +401,8 @@ class BombermanAI {
       for (let x = minX; x <= maxX; x++) {
         if (grid[bot.y][x] === 1) return false;
         if (grid[bot.y][x] === 2) return false; // Soft block also blocks line of sight
+        if (grid[bot.y][x] === 3) return false; // Bomb blocks line of sight
+        if (grid[bot.y][x] === 5) return false; // Fire blocks line of sight
       }
       return true;
     }
@@ -375,6 +414,8 @@ class BombermanAI {
       for (let y = minY; y <= maxY; y++) {
         if (grid[y][bot.x] === 1) return false;
         if (grid[y][bot.x] === 2) return false;
+        if (grid[y][bot.x] === 3) return false;
+        if (grid[y][bot.x] === 5) return false;
       }
       return true;
     }
@@ -423,6 +464,50 @@ class BombermanAI {
     return best;
   }
 
+  findSoftBlockApproachTile(bot, grid, danger) {
+    const H = grid.length;
+    const W = grid[0].length;
+
+    let bestSoft = null;
+    let bestSoftDist = Infinity;
+
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        if (grid[y][x] !== 2) continue;
+        const d = Math.abs(x - bot.x) + Math.abs(y - bot.y);
+        if (d < bestSoftDist) {
+          bestSoftDist = d;
+          bestSoft = { x, y };
+        }
+      }
+    }
+
+    if (!bestSoft) return null;
+
+    const approach = [];
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const ax = bestSoft.x + dx;
+      const ay = bestSoft.y + dy;
+      if (!this.inBounds(grid, ax, ay)) continue;
+      if (grid[ay][ax] === 1) continue;
+      if (grid[ay][ax] === 2) continue;
+      if (grid[ay][ax] === 3) continue; // bomb
+      if (grid[ay][ax] === 5) continue; // fire
+      const distToBot = Math.abs(ax - bot.x) + Math.abs(ay - bot.y);
+      const dangerPenalty = danger && danger[ay][ax] === 1 ? 100 : 0;
+      approach.push({ x: ax, y: ay, score: distToBot + dangerPenalty });
+    }
+
+    if (approach.length === 0) return null;
+    approach.sort((a, b) => a.score - b.score);
+    return { x: approach[0].x, y: approach[0].y };
+  }
+
   // ---------------------------------------------------
   // A* PATHFINDING
   // ---------------------------------------------------
@@ -461,6 +546,7 @@ class BombermanAI {
         if (!this.inBounds(grid, nx, ny)) continue;
         if (grid[ny][nx] === 1) continue; // solid
         if (grid[ny][nx] === 2) continue; // soft
+        if (grid[ny][nx] === 3) continue; // bomb
         if (danger[ny][nx] === 1) continue; // danger
 
         const nk = nx + "," + ny;
@@ -516,21 +602,42 @@ class BombermanAI {
     return path[0];
   }
 
-  randomMove(grid, bot) {
+  randomMove(grid, bot, danger) {
     const dirs = [
       { x: 0, y: -1 },
       { x: 0, y: 1 },
       { x: -1, y: 0 },
       { x: 1, y: 0 },
     ];
-    const valid = dirs.filter((d) => {
+    
+    // First try to find a safe move
+    let valid = dirs.filter((d) => {
       const nx = bot.x + d.x;
       const ny = bot.y + d.y;
-      // Check bounds and if walkable (not wall/soft/bomb)
       return (
-        this.inBounds(grid, nx, ny) && grid[ny][nx] !== 1 && grid[ny][nx] !== 2
+        this.inBounds(grid, nx, ny) && 
+        grid[ny][nx] !== 1 && 
+        grid[ny][nx] !== 2 &&
+        grid[ny][nx] !== 3 && // bomb
+        grid[ny][nx] !== 5 && // fire
+        (!danger || danger[ny][nx] === 0)
       );
     });
+
+    // If no safe moves, fall back to any valid move (desperation)
+    if (valid.length === 0) {
+       valid = dirs.filter((d) => {
+        const nx = bot.x + d.x;
+        const ny = bot.y + d.y;
+        return (
+          this.inBounds(grid, nx, ny) && 
+          grid[ny][nx] !== 1 && 
+          grid[ny][nx] !== 2 &&
+          grid[ny][nx] !== 3 && // bomb
+          grid[ny][nx] !== 5 // fire
+        );
+      });
+    }
 
     if (valid.length === 0) return null;
     const d = valid[Math.floor(Math.random() * valid.length)];
