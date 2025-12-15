@@ -52,6 +52,10 @@ class BombermanAI {
     const bot = players.find((p) => p.id === this.id);
     if (!bot) return { move: null, placeBomb: false };
 
+    // Round positions to avoid float errors
+    bot.x = Math.round(bot.x);
+    bot.y = Math.round(bot.y);
+
     // Throttle decision making
     if (now - this.lastDecision < this.DECISION_INTERVAL) {
       return { move: null, placeBomb: false };
@@ -217,27 +221,71 @@ class BombermanAI {
   performMinimaxMove(ctx) {
     const { bot, grid, danger, players } = ctx;
 
+    // Init stay count if needed
+    if (typeof this.stayCount === "undefined") this.stayCount = 0;
+
     // Use Minimax to find the best adjacent cell to move to
-    // Depth 2 is usually enough for real-time movement decisions
     const bestMove = this.minimax(grid, bot, players, danger, 2, true);
+    let minimaxMove = null;
 
     if (bestMove && bestMove.move) {
-      ctx.result.move = bestMove.move;
-      return "SUCCESS";
+      const isStay = bestMove.move.x === bot.x && bestMove.move.y === bot.y;
+
+      if (isStay) {
+        this.stayCount++;
+      } else {
+        this.stayCount = 0;
+      }
+
+      // Anti-Stuck: If we stayed for too long, force a random safe move
+      if (this.stayCount > 4) {
+        const validMoves = this.getValidMoves(grid, bot, danger);
+        // Filter out Stay
+        const moveCandidates = validMoves.filter(
+          (m) => m.x !== bot.x || m.y !== bot.y
+        );
+        if (moveCandidates.length > 0) {
+          ctx.result.move =
+            moveCandidates[Math.floor(Math.random() * moveCandidates.length)];
+          this.stayCount = 0;
+          return "SUCCESS";
+        }
+      }
+
+      if (!isStay) {
+        ctx.result.move = bestMove.move;
+        return "SUCCESS";
+      }
+      minimaxMove = bestMove.move;
     }
 
-    // Fallback to A* if Minimax returns nothing (shouldn't happen often)
-    // or if we just want to pathfind to a distant powerup
+    // Fallback 1: A* to Powerup
     const powerup = this.findClosestPowerUp(bot, grid);
     if (powerup) {
       const path = this.aStar(grid, bot, powerup, danger);
-      if (path) {
+      if (path && path.length > 0) {
         ctx.result.move = this.stepTo(path);
         return "SUCCESS";
       }
     }
 
-    // Fallback Random
+    // Fallback 2: A* to Enemy (Hunt)
+    const enemy = this.findClosestEnemy(bot, players);
+    if (enemy) {
+      const path = this.aStar(grid, bot, enemy, danger);
+      if (path && path.length > 0) {
+        ctx.result.move = this.stepTo(path);
+        return "SUCCESS";
+      }
+    }
+
+    // Fallback 3: Use Minimax "Stay" if it was the best safe option
+    if (minimaxMove) {
+      ctx.result.move = minimaxMove;
+      return "SUCCESS";
+    }
+
+    // Fallback 4: Random (Desperation)
     ctx.result.move = this.randomMove(grid, bot, danger);
     return "SUCCESS";
   }
@@ -326,11 +374,19 @@ class BombermanAI {
     // 1. Safety (Heaviest Weight)
     if (danger[bot.y][bot.x] === 1) score -= 1000;
 
-    // 2. Enemy Distance (Aggressive)
+    // 2. Enemy Distance (Aggressive but Cautious)
     const enemy = this.findClosestEnemy(bot, players);
     if (enemy) {
       const dist = Math.abs(bot.x - enemy.x) + Math.abs(bot.y - enemy.y);
-      score -= dist * 10; // Closer is better
+
+      // Avoid hugging the enemy (dist 1) to prevent being trapped/locked
+      if (dist <= 1) {
+        score -= 200; // Too close! High risk.
+      } else if (dist <= 3) {
+        score += 50; // Sweet spot (Fighting range)
+      } else {
+        score -= dist * 10; // Chase if too far
+      }
     }
 
     // 3. Powerups
