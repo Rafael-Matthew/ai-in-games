@@ -6,16 +6,42 @@ class BombermanAI {
     this.lastDecision = 0;
     this.lastBombTime = 0;
     this.BOMB_COOLDOWN = 900;
-    // Keep this fairly small so movement doesn't stutter.
     this.DECISION_INTERVAL = 30;
 
-    // After placing a bomb, force the bot to keep moving for a short time
-    // so it doesn't stop on a marginally-safe tile.
     this._escapeUntil = 0;
-
-    // Cached escape plan (list of tiles). This avoids re-picking a worse
-    // "safe" tile mid-run.
     this._escapePath = null;
+
+    // Initialize Behavior Tree
+    this.tree = this.buildBehaviorTree();
+  }
+
+  // ---------------------------------------------------
+  // BEHAVIOR TREE BUILDER
+  // ---------------------------------------------------
+  buildBehaviorTree() {
+    // Nodes are executed from top to bottom (Priority)
+    return new Selector([
+      // 1. SURVIVAL: If in danger, escape immediately
+      new Sequence([
+        new Condition((ctx) => this.isInDanger(ctx)),
+        new Action((ctx) => this.performEscape(ctx)),
+      ]),
+
+      // 2. COMBAT: If enemy is vulnerable, attack (Minimax/Heuristic check)
+      new Sequence([
+        new Condition((ctx) => this.canAttack(ctx)),
+        new Action((ctx) => this.performAttack(ctx)),
+      ]),
+
+      // 3. CLEARING: If blocked by soft block, destroy it
+      new Sequence([
+        new Condition((ctx) => this.isBlockedBySoftBlock(ctx)),
+        new Action((ctx) => this.performClearBlock(ctx)),
+      ]),
+
+      // 4. STRATEGY: Use Minimax to find the best move (Hunt/Farm)
+      new Action((ctx) => this.performMinimaxMove(ctx)),
+    ]);
   }
 
   update(gameState) {
@@ -32,159 +58,301 @@ class BombermanAI {
     }
     this.lastDecision = now;
 
-    // Convert Grid to Integer Grid for the User's Logic
+    // Pre-process Grid
     // 1=Wall, 2=Soft, 3=Bomb, 4=Powerup, 5=Fire, 0=Empty
     const grid = rawGrid.map((row) =>
       row.map((cell) => {
         if (cell.type === "wall") return 1;
         if (cell.type === "soft") return 2;
-        if (cell.type === "bomb") return 3; // Treat bomb as distinct obstacle
+        if (cell.type === "bomb") return 3;
         if (cell.type === "powerup") return 4;
         if (cell.type === "fire") return 5;
         return 0;
       })
     );
 
-    // 1. Build danger map
+    // Build Danger Map
     const danger = this.getDangerMap(grid, bombs);
 
-    // 2. If bot in danger → escape
-    if (danger[bot.y][bot.x] === 1 || now < this._escapeUntil) {
-      // Prefer continuing an existing escape plan if it still makes sense.
-      if (this._escapePath && this._escapePath.length > 0) {
-        const next = this._escapePath[0];
-        // If already reached the next step, advance.
-        if (next.x === bot.x && next.y === bot.y) {
-          this._escapePath.shift();
-        }
-      }
+    // Context object passed to all BT nodes
+    const context = {
+      bot,
+      grid,
+      danger,
+      bombs,
+      players,
+      now,
+      ai: this,
+      result: { move: null, placeBomb: false }, // Output
+    };
 
-      if (!this._escapePath || this._escapePath.length === 0) {
-        this._escapePath = this.findSafePath(bot, grid, danger, {
-          minDistance: 2,
-          requireSafeNeighbor: true,
-        });
-      }
+    // Execute Tree
+    this.tree.tick(context);
 
-      if (this._escapePath && this._escapePath.length > 0) {
-        return { move: this.stepTo(this._escapePath), placeBomb: false };
-      }
-
-      // If we are waiting for a bomb (escape timer active) and are currently safe,
-      // stop here. Do not proceed to attack or farm soft blocks until the bomb explodes.
-      if (now < this._escapeUntil && danger[bot.y][bot.x] === 0) {
-        // Double check: are we "barely" safe? If so, try to move further.
-        const neighborsDanger = this.countDangerNeighbors(danger, bot.x, bot.y);
-        if (neighborsDanger > 0) {
-          // We are adjacent to danger. Try to find a better spot.
-          const betterPath = this.findSafePath(bot, grid, danger, {
-            minDistance: 1, // Just move away
-            requireSafeNeighbor: true,
-          });
-          if (betterPath && betterPath.length > 0) {
-            this._escapePath = betterPath;
-            return { move: this.stepTo(this._escapePath), placeBomb: false };
-          }
-        }
-        return { move: null, placeBomb: false };
-      }
-    } else {
-      // Not escaping anymore.
-      this._escapePath = null;
-    }
-
-    // 3. Attack enemy if in range + safe
-    const target = this.findClosestEnemy(bot, players);
-    if (target && this.canBombEnemy(bot, target, grid)) {
-      if (now - this.lastBombTime > this.BOMB_COOLDOWN) {
-        // Only bomb if we can escape from the blast of the bomb we're placing.
-        // PARANOID MODE: Assume the bomb is bigger than we think to ensure safety.
-        const safeRadius = (this.bombRange || 2) + 2;
-        const simBombs = bombs.concat([
-          {
-            x: bot.x,
-            y: bot.y,
-            radius: safeRadius,
-            timer: 999,
-            ownerId: this.id,
-          },
-        ]);
-        const simDanger = this.getDangerMap(grid, simBombs);
-        const escapePath = this.findSafePath(bot, grid, simDanger, {
-          minDistance: safeRadius + 1,
-          requireSafeNeighbor: true,
-        });
-        if (escapePath && escapePath.length > 0) {
-          this.lastBombTime = now;
-          // Force continued fleeing for a short window to avoid stopping too close.
-          // IMPORTANT: do NOT move on the same tick as placing a bomb.
-          // In this engine, bombs are placed after movement, so moving+placing
-          // would place the bomb on the destination tile.
-          // Wait 4500ms (3.5s fuse + 1s safety)
-          this._escapeUntil = now + 4500;
-          this._escapePath = escapePath;
-          return { move: null, placeBomb: true };
-        }
-      }
-    }
-
-    // 4. If blocked by soft block → bomb it
-    if (this.isSoftBlockFront(bot, grid)) {
-      if (now - this.lastBombTime > this.BOMB_COOLDOWN) {
-        // PARANOID MODE: Assume the bomb is bigger than we think to ensure safety.
-        const safeRadius = (this.bombRange || 2) + 2;
-        const simBombs = bombs.concat([
-          {
-            x: bot.x,
-            y: bot.y,
-            radius: safeRadius,
-            timer: 999,
-            ownerId: this.id,
-          },
-        ]);
-        const simDanger = this.getDangerMap(grid, simBombs);
-        // Soft-block clearing happens in tighter spaces; relax escape constraints a bit
-        // so the bot will actually bomb (but still only if an escape exists).
-        const escapePath = this.findSafePath(bot, grid, simDanger, {
-          minDistance: safeRadius,
-          requireSafeNeighbor: false,
-        });
-        if (escapePath && escapePath.length > 0) {
-          this.lastBombTime = now;
-          this._escapeUntil = now + 4500;
-          this._escapePath = escapePath;
-          return { move: null, placeBomb: true };
-        }
-      }
-    }
-
-    // 5. Otherwise → move toward enemy, power up, or a soft block to clear
-    let goal = null;
-
-    // enemy first
-    if (target) {
-      goal = { x: target.x, y: target.y };
-    } else {
-      // Prefer powerups; if none, hunt soft blocks so bots can open space.
-      goal = this.findClosestPowerUp(bot, grid);
-      if (!goal) {
-        goal = this.findSoftBlockApproachTile(bot, grid, danger);
-      }
-    }
-
-    if (goal) {
-      const path = this.aStar(grid, bot, goal, danger);
-      if (path) {
-        return { move: this.stepTo(path), placeBomb: false };
-      }
-    }
-
-    // 6. If everything fails → random move (never idle)
-    return { move: this.randomMove(grid, bot, danger), placeBomb: false };
+    return context.result;
   }
 
   // ---------------------------------------------------
-  // DANGER MAP
+  // BT CONDITIONS & ACTIONS
+  // ---------------------------------------------------
+
+  isInDanger(ctx) {
+    const { bot, danger, now } = ctx;
+    // Check if current tile is dangerous OR if we are in "panic mode" (escape timer)
+    return danger[bot.y][bot.x] === 1 || now < this._escapeUntil;
+  }
+
+  performEscape(ctx) {
+    const { bot, grid, danger, now } = ctx;
+
+    // Continue existing path if valid
+    if (this._escapePath && this._escapePath.length > 0) {
+      const next = this._escapePath[0];
+      if (next.x === bot.x && next.y === bot.y) {
+        this._escapePath.shift();
+      }
+    }
+
+    // Recalculate if no path
+    if (!this._escapePath || this._escapePath.length === 0) {
+      this._escapePath = this.findSafePath(bot, grid, danger, {
+        minDistance: 2,
+        requireSafeNeighbor: true,
+      });
+    }
+
+    // If we have a path, move
+    if (this._escapePath && this._escapePath.length > 0) {
+      ctx.result.move = this.stepTo(this._escapePath);
+      return "SUCCESS";
+    }
+
+    // If waiting for bomb to explode and currently safe, stay put
+    if (now < this._escapeUntil && danger[bot.y][bot.x] === 0) {
+      // Optional: Micro-adjustment if neighbor is dangerous
+      const neighborsDanger = this.countDangerNeighbors(danger, bot.x, bot.y);
+      if (neighborsDanger > 0) {
+        const betterPath = this.findSafePath(bot, grid, danger, {
+          minDistance: 1,
+          requireSafeNeighbor: true,
+        });
+        if (betterPath && betterPath.length > 0) {
+          this._escapePath = betterPath;
+          ctx.result.move = this.stepTo(this._escapePath);
+          return "SUCCESS";
+        }
+      }
+      return "SUCCESS"; // Stay safe
+    }
+
+    return "FAILURE"; // Trapped?
+  }
+
+  canAttack(ctx) {
+    const { bot, players, grid, now } = ctx;
+    if (now - this.lastBombTime < this.BOMB_COOLDOWN) return false;
+
+    const target = this.findClosestEnemy(bot, players);
+    if (!target) return false;
+
+    return this.canBombEnemy(bot, target, grid);
+  }
+
+  performAttack(ctx) {
+    const { bot, grid, bombs, now } = ctx;
+
+    // Simulate placing a bomb to ensure we don't kill ourselves
+    const safeRadius = (this.bombRange || 2) + 2;
+    const simBombs = bombs.concat([
+      { x: bot.x, y: bot.y, radius: safeRadius, timer: 999, ownerId: this.id },
+    ]);
+    const simDanger = this.getDangerMap(grid, simBombs);
+
+    const escapePath = this.findSafePath(bot, grid, simDanger, {
+      minDistance: safeRadius + 1,
+      requireSafeNeighbor: true,
+    });
+
+    if (escapePath && escapePath.length > 0) {
+      this.lastBombTime = now;
+      this._escapeUntil = now + 4500;
+      this._escapePath = escapePath;
+      ctx.result.placeBomb = true;
+      return "SUCCESS";
+    }
+
+    return "FAILURE"; // Unsafe to bomb
+  }
+
+  isBlockedBySoftBlock(ctx) {
+    const { bot, grid, now } = ctx;
+    if (now - this.lastBombTime < this.BOMB_COOLDOWN) return false;
+    return this.isSoftBlockFront(bot, grid);
+  }
+
+  performClearBlock(ctx) {
+    // Same logic as attack, but for blocks (slightly relaxed safety)
+    const { bot, grid, bombs, now } = ctx;
+    const safeRadius = (this.bombRange || 2) + 2;
+    const simBombs = bombs.concat([
+      { x: bot.x, y: bot.y, radius: safeRadius, timer: 999, ownerId: this.id },
+    ]);
+    const simDanger = this.getDangerMap(grid, simBombs);
+
+    const escapePath = this.findSafePath(bot, grid, simDanger, {
+      minDistance: safeRadius,
+      requireSafeNeighbor: false,
+    });
+
+    if (escapePath && escapePath.length > 0) {
+      this.lastBombTime = now;
+      this._escapeUntil = now + 4500;
+      this._escapePath = escapePath;
+      ctx.result.placeBomb = true;
+      return "SUCCESS";
+    }
+    return "FAILURE";
+  }
+
+  performMinimaxMove(ctx) {
+    const { bot, grid, danger, players } = ctx;
+
+    // Use Minimax to find the best adjacent cell to move to
+    // Depth 2 is usually enough for real-time movement decisions
+    const bestMove = this.minimax(grid, bot, players, danger, 2, true);
+
+    if (bestMove && bestMove.move) {
+      ctx.result.move = bestMove.move;
+      return "SUCCESS";
+    }
+
+    // Fallback to A* if Minimax returns nothing (shouldn't happen often)
+    // or if we just want to pathfind to a distant powerup
+    const powerup = this.findClosestPowerUp(bot, grid);
+    if (powerup) {
+      const path = this.aStar(grid, bot, powerup, danger);
+      if (path) {
+        ctx.result.move = this.stepTo(path);
+        return "SUCCESS";
+      }
+    }
+
+    // Fallback Random
+    ctx.result.move = this.randomMove(grid, bot, danger);
+    return "SUCCESS";
+  }
+
+  // ---------------------------------------------------
+  // MINIMAX ALGORITHM
+  // ---------------------------------------------------
+  minimax(grid, bot, players, danger, depth, isMaximizing) {
+    // Terminal condition
+    if (depth === 0) {
+      return { score: this.evaluateState(grid, bot, players, danger) };
+    }
+
+    const validMoves = this.getValidMoves(grid, bot, danger);
+
+    if (isMaximizing) {
+      let maxEval = -Infinity;
+      let bestMove = null;
+
+      if (validMoves.length === 0) {
+        // If no moves, evaluate current state (likely bad)
+        return { score: this.evaluateState(grid, bot, players, danger) };
+      }
+
+      for (const move of validMoves) {
+        // Simulate Move (Simplified: We don't clone the whole grid, just the bot pos)
+        const nextBot = { x: move.x, y: move.y, id: bot.id };
+        
+        // Recursive call (Minimizing step: Enemy moves)
+        const evalResult = this.minimax(grid, nextBot, players, danger, depth - 1, false);
+        
+        if (evalResult.score > maxEval) {
+          maxEval = evalResult.score;
+          bestMove = move;
+        }
+      }
+      return { score: maxEval, move: bestMove };
+    } else {
+      // Minimizing Player (Enemy)
+      // We assume the closest enemy tries to minimize our score (move closer to us)
+      const enemy = this.findClosestEnemy(bot, players);
+      if (!enemy) return { score: this.evaluateState(grid, bot, players, danger) };
+
+      let minEval = Infinity;
+      const enemyMoves = this.getValidMoves(grid, enemy, null); // Enemy ignores danger map for simplicity or assumes they are smart
+
+      if (enemyMoves.length === 0) return { score: this.evaluateState(grid, bot, players, danger) };
+
+      for (const move of enemyMoves) {
+        const nextEnemy = { x: move.x, y: move.y, id: enemy.id };
+        // We don't actually update the players array in simulation to save perf, 
+        // just pass the modified enemy to evaluation if needed, or assume state change.
+        // For this simplified minimax, we just recurse back to Max.
+        
+        // Note: In a real full simulation, we'd update the grid. 
+        // Here we just tick depth.
+        const evalResult = this.minimax(grid, bot, players, danger, depth - 1, true);
+        
+        if (evalResult.score < minEval) {
+          minEval = evalResult.score;
+        }
+      }
+      return { score: minEval };
+    }
+  }
+
+  evaluateState(grid, bot, players, danger) {
+    let score = 0;
+
+    // 1. Safety (Heaviest Weight)
+    if (danger[bot.y][bot.x] === 1) score -= 1000;
+
+    // 2. Enemy Distance (Aggressive)
+    const enemy = this.findClosestEnemy(bot, players);
+    if (enemy) {
+      const dist = Math.abs(bot.x - enemy.x) + Math.abs(bot.y - enemy.y);
+      score -= dist * 10; // Closer is better
+    }
+
+    // 3. Powerups
+    if (grid[bot.y][bot.x] === 4) score += 50;
+
+    // 4. Center Control (Optional)
+    // score -= (Math.abs(bot.x - grid[0].length/2) + Math.abs(bot.y - grid.length/2));
+
+    return score;
+  }
+
+  getValidMoves(grid, unit, danger) {
+    const moves = [];
+    const dirs = [
+      { x: 0, y: 0 }, // Stay
+      { x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }
+    ];
+
+    for (const d of dirs) {
+      const nx = unit.x + d.x;
+      const ny = unit.y + d.y;
+      if (this.inBounds(grid, nx, ny)) {
+        const cell = grid[ny][nx];
+        // Walkable: Empty(0), Powerup(4), Fire(5 - risky but walkable in engine usually, but we avoid)
+        // Blocked: Wall(1), Soft(2), Bomb(3)
+        const isWalkable = cell !== 1 && cell !== 2 && cell !== 3;
+        const isSafe = !danger || danger[ny][nx] === 0;
+        
+        if (isWalkable && isSafe) {
+          moves.push({ x: nx, y: ny });
+        }
+      }
+    }
+    return moves;
+  }
+
+  // ---------------------------------------------------
+  // HELPERS (Reused)
   // ---------------------------------------------------
   getDangerMap(grid, bombs) {
     const H = grid.length;
@@ -648,3 +816,61 @@ class BombermanAI {
     return { x: bot.x + d.x, y: bot.y + d.y };
   }
 }
+
+// ---------------------------------------------------
+// BEHAVIOR TREE CLASSES
+// ---------------------------------------------------
+
+class Node {
+  tick(context) { return "FAILURE"; }
+}
+
+class Selector extends Node {
+  constructor(children) {
+    super();
+    this.children = children;
+  }
+  tick(context) {
+    for (const child of this.children) {
+      const status = child.tick(context);
+      if (status === "SUCCESS" || status === "RUNNING") return status;
+    }
+    return "FAILURE";
+  }
+}
+
+class Sequence extends Node {
+  constructor(children) {
+    super();
+    this.children = children;
+  }
+  tick(context) {
+    for (const child of this.children) {
+      const status = child.tick(context);
+      if (status === "FAILURE" || status === "RUNNING") return status;
+    }
+    return "SUCCESS";
+  }
+}
+
+class Condition extends Node {
+  constructor(predicate) {
+    super();
+    this.predicate = predicate;
+  }
+  tick(context) {
+    return this.predicate(context) ? "SUCCESS" : "FAILURE";
+  }
+}
+
+class Action extends Node {
+  constructor(actionFn) {
+    super();
+    this.actionFn = actionFn;
+  }
+  tick(context) {
+    return this.actionFn(context);
+  }
+}
+
+
