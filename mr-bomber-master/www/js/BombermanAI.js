@@ -265,10 +265,17 @@ class BombermanAI {
       for (const move of validMoves) {
         // Simulate Move (Simplified: We don't clone the whole grid, just the bot pos)
         const nextBot = { x: move.x, y: move.y, id: bot.id };
-        
+
         // Recursive call (Minimizing step: Enemy moves)
-        const evalResult = this.minimax(grid, nextBot, players, danger, depth - 1, false);
-        
+        const evalResult = this.minimax(
+          grid,
+          nextBot,
+          players,
+          danger,
+          depth - 1,
+          false
+        );
+
         if (evalResult.score > maxEval) {
           maxEval = evalResult.score;
           bestMove = move;
@@ -279,23 +286,32 @@ class BombermanAI {
       // Minimizing Player (Enemy)
       // We assume the closest enemy tries to minimize our score (move closer to us)
       const enemy = this.findClosestEnemy(bot, players);
-      if (!enemy) return { score: this.evaluateState(grid, bot, players, danger) };
+      if (!enemy)
+        return { score: this.evaluateState(grid, bot, players, danger) };
 
       let minEval = Infinity;
       const enemyMoves = this.getValidMoves(grid, enemy, null); // Enemy ignores danger map for simplicity or assumes they are smart
 
-      if (enemyMoves.length === 0) return { score: this.evaluateState(grid, bot, players, danger) };
+      if (enemyMoves.length === 0)
+        return { score: this.evaluateState(grid, bot, players, danger) };
 
       for (const move of enemyMoves) {
         const nextEnemy = { x: move.x, y: move.y, id: enemy.id };
-        // We don't actually update the players array in simulation to save perf, 
+        // We don't actually update the players array in simulation to save perf,
         // just pass the modified enemy to evaluation if needed, or assume state change.
         // For this simplified minimax, we just recurse back to Max.
-        
-        // Note: In a real full simulation, we'd update the grid. 
+
+        // Note: In a real full simulation, we'd update the grid.
         // Here we just tick depth.
-        const evalResult = this.minimax(grid, bot, players, danger, depth - 1, true);
-        
+        const evalResult = this.minimax(
+          grid,
+          bot,
+          players,
+          danger,
+          depth - 1,
+          true
+        );
+
         if (evalResult.score < minEval) {
           minEval = evalResult.score;
         }
@@ -330,7 +346,10 @@ class BombermanAI {
     const moves = [];
     const dirs = [
       { x: 0, y: 0 }, // Stay
-      { x: 0, y: -1 }, { x: 0, y: 1 }, { x: -1, y: 0 }, { x: 1, y: 0 }
+      { x: 0, y: -1 },
+      { x: 0, y: 1 },
+      { x: -1, y: 0 },
+      { x: 1, y: 0 },
     ];
 
     for (const d of dirs) {
@@ -342,7 +361,7 @@ class BombermanAI {
         // Blocked: Wall(1), Soft(2), Bomb(3)
         const isWalkable = cell !== 1 && cell !== 2 && cell !== 3;
         const isSafe = !danger || danger[ny][nx] === 0;
-        
+
         if (isWalkable && isSafe) {
           moves.push({ x: nx, y: ny });
         }
@@ -822,7 +841,9 @@ class BombermanAI {
 // ---------------------------------------------------
 
 class Node {
-  tick(context) { return "FAILURE"; }
+  tick(context) {
+    return "FAILURE";
+  }
 }
 
 class Selector extends Node {
@@ -872,5 +893,3 @@ class Action extends Node {
     return this.actionFn(context);
   }
 }
-
-
