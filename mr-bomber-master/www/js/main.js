@@ -189,6 +189,7 @@ class Terrain {
   }
 
   spawnMonsters(monsters) {
+    if (!monsters || monsters.length === 0) return;
     if (!args.includes("-m")) {
       for (let i = 0; i < 8 - sprites.length; i++) {
         const monster = monsters[Int.random(monsters.length)];

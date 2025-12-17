@@ -60,12 +60,7 @@ const maps = [
             { type: PowerUpType.Shield, count: 1 },
             { type: PowerUpType.Kick, count: 2 }
         ],
-        monsters: [
-            { startX: 7, startY: 9, waitAfterTurn: 30, type: 0 },
-            { startX: 1, startY: 11, waitAfterTurn: 30, type: 0 },
-            { startX: 5, startY: 3, waitAfterTurn: 30, type: 0 },
-            { startX: 13, startY: 3, waitAfterTurn: 30, type: 0 },
-        ],
+        monsters: [],
         time: 120,
         fin: defaultFin
     },
@@ -94,9 +89,7 @@ const maps = [
             { type: PowerUpType.Shield, count: 1 },
             { type: PowerUpType.Kick, count: 2 }
         ],
-        monsters: [
-            { startX: 7, startY: 9, waitAfterTurn: 20, type: 1, livesCount: 3 },
-        ],
+        monsters: [],
         time: 120,
         fin: defaultFin
     },
@@ -156,9 +149,7 @@ const maps = [
             { type: PowerUpType.Banana, count: 10 },
             { type: PowerUpType.Kick, count: 2 }
         ],
-        monsters: [
-            { waitAfterTurn: 60, type: 3 },
-        ],
+        monsters: [],
         time: 90,
         fin: defaultFin
     },
@@ -187,13 +178,7 @@ const maps = [
             { type: PowerUpType.Clock, count: 1 },
             { type: PowerUpType.Kick, count: 2 }
         ],
-        monsters: [
-            { waitAfterTurn: 30, type: 0 },
-            { waitAfterTurn: 30, type: 0 },
-            { waitAfterTurn: 30, type: 1, livesCount: 3 },
-            { waitAfterTurn: 30, type: 1, livesCount: 3 },
-            { waitAfterTurn: 30, type: 2, speed: 0.5 },
-        ],
+        monsters: [],
         time: 60,
         fin: [
              "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000", "000",
@@ -236,9 +221,7 @@ const maps = [
             { type: PowerUpType.Clock, count: 1 },
             { type: PowerUpType.Kick, count: 1 }
         ],
-        monsters: [
-            { waitAfterTurn: 48, type: 4, livesCount: 3, speed: 0.3 },
-        ],
+        monsters: [],
         time: 120,
         fin: defaultFin,
     },
@@ -266,10 +249,7 @@ const maps = [
             { type: PowerUpType.Shield, count: 1 },
             { type: PowerUpType.Kick, count: 2 }
         ],
-        monsters: [
-            { waitAfterTurn: 48, type: 1, livesCount: 3 },
-            { waitAfterTurn: 48, type: 4, livesCount: 3, speed: 0.3 },
-        ],
+        monsters: [],
         initialBonus: [
             PowerUpType.Kick
         ],
@@ -300,9 +280,7 @@ const maps = [
             { type: PowerUpType.Shield, count: 1 },
             { type: PowerUpType.Kick, count: 2 }
         ],
-        monsters: [
-            { waitAfterTurn: 48, type: 5, livesCount: 1 },
-        ],
+        monsters: [],
         initialBonus: [
             PowerUpType.Kick
         ],
@@ -340,9 +318,7 @@ const maps = [
             "#%%%%%%%%%%%%%%%%%#",
         ],
         powerUps: [],
-        monsters: [
-            { waitAfterTurn: 48, type: 1, livesCount: 2 },
-        ],
+        monsters: [],
         initialBonus: [
             PowerUpType.Kick,
         ],
