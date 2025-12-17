@@ -64,6 +64,8 @@ class Terrain {
     }
   }
   spawnMonsters(monsters) {
+    return; // Monsters disabled
+    /*
     if (!args.includes("-m")) {
       for (let i = 0; i < 8 - sprites.length; i++) {
         const monster = monsters[Int.random(monsters.length)];
@@ -71,6 +73,7 @@ class Terrain {
         this.monsters.push(new Monster(monster, spawn));
       }
     }
+    */
   }
   generateSpawn(spawnIndex = -1) {
     if (spawnIndex == -1) {

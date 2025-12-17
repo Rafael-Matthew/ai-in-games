@@ -189,6 +189,8 @@ class Terrain {
   }
 
   spawnMonsters(monsters) {
+    return; // Monsters disabled by user request
+    /*
     if (!monsters || monsters.length === 0) return;
     if (!args.includes("-m")) {
       for (let i = 0; i < 8 - sprites.length; i++) {
@@ -197,6 +199,7 @@ class Terrain {
         this.monsters.push(new Monster(monster, spawn));
       }
     }
+    */
   }
 
   generateSpawn(spawnIndex = -1) {
@@ -323,9 +326,13 @@ class Terrain {
       }
     }
 
+    /*
     for (let monster of this.monsters) {
       monster.update();
     }
+    */
+    this.monsters = []; // Force clear in update
+    /*
     for (let i = this.monsters.length - 1; i >= 0; i--) {
       const cellX = Int.divRound(this.monsters[i].x, 16);
       const cellY = Int.divRound(this.monsters[i].y, 16);
@@ -346,6 +353,7 @@ class Terrain {
         this.monsters.splice(i, 1);
       }
     }
+    */
 
     for (let sprite of sprites) {
       sprite.update(1);
@@ -1291,6 +1299,11 @@ function drawAll(interpolationPercentage) {
       }
     }
 
+    // Force clear monsters every frame to be absolutely sure
+    if (map && map.monsters && map.monsters.length > 0) {
+      map.monsters = [];
+    }
+
     var spritesToDraw = sprites.concat(map.monsters);
     spritesToDraw.sort((a, b) => {
       let result = a.y - b.y;
@@ -1516,7 +1529,7 @@ function startGame(playerList) {
 
   // Spawn monsters ("bebek") only after the first round so round 1 is completely safe/empty.
   if (roundNumber > 0 || isDemo) {
-    map.spawnMonsters(maps[mapIndex].monsters);
+    // map.spawnMonsters(maps[mapIndex].monsters);
   }
   // Increment round counter only for real (non-demo) games so demo loop doesn't consume the blank first round
   if (!isDemo) roundNumber++;
@@ -1543,11 +1556,13 @@ function ensureAutoSpawnRoster(startMenu) {
   }
   // Only auto-fill bots if the user hasn't added any manually (playing alone)
   // If user added bots (length > 1), respect their setup.
+  /*
   if (startMenu.playerList.length === 1) {
     while (startMenu.playerList.length < 6) {
       startMenu.addBot();
     }
   }
+  */
 }
 
 function end(fps, panic) {

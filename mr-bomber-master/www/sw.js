@@ -1,5 +1,5 @@
 // Files to cache
-const cacheName = "MrBoom-v3";
+const cacheName = "MrBoom-v9-fix-syntax";
 const contentToCache = [
   "index.html",
   "Gfx2x/NEIGE1.PNG",
@@ -37,11 +37,11 @@ const contentToCache = [
   "Gfx2x/VIC4.PNG",
   "Gfx2x/CRAYON2.PNG",
   "Gfx2x/SOUCOUPE.PNG",
-  "js/mainloop.min.js",
-  "js/assets.js",
-  "js/sound.js",
-  "js/main.js",
-  "js/map.js",
+  "js/mainloop.min.js?v=no-monsters",
+  "js/assets.js?v=no-monsters",
+  "js/sound.js?v=no-monsters",
+  "js/main.js?v=no-monsters",
+  "js/map.js?v=no-monsters",
   "style.css",
   "sound/bang.wav",
   "sound/posebomb.wav",
